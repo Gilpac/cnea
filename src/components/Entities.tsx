@@ -1,11 +1,14 @@
-import { Building2, Users2, Network } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import meetingImage from "@/assets/professional-meeting.jpg";
+import logoInep from "@/assets/logo-inep.png";
+import logoCmpea from "@/assets/logo-cmpea.png";
+import logoAepea from "@/assets/logo-aepea.png";
+import logoCnea from "@/assets/logo-cnea.png";
 
 const Entities = () => {
   const entities = [
     {
-      icon: Building2,
+      logo: logoInep,
       acronym: "INEP",
       name: "Instituto Nacional de Estágios Profissionais de Angola",
       description: "Órgão técnico e estratégico voltado para a regulação, monitoramento e desenvolvimento do sistema nacional de estágios profissionais.",
@@ -17,7 +20,7 @@ const Entities = () => {
       ]
     },
     {
-      icon: Users2,
+      logo: logoAepea,
       acronym: "AEPEA",
       name: "Associação dos Estudantes e Profissionais Estagiários de Angola",
       description: "Associação de caráter representativo e participativo, voltada para a defesa dos direitos, formação e empregabilidade dos estagiários.",
@@ -29,7 +32,7 @@ const Entities = () => {
       ]
     },
     {
-      icon: Network,
+      logo: logoCmpea,
       acronym: "CMPEA",
       name: "Corporativa Multissetorial de Estudantes e Profissionais Estagiários de Angola",
       description: "Entidade corporativa com enfoque setorial e técnico, reunindo estagiários de diversas áreas para promoção da qualificação.",
@@ -71,8 +74,8 @@ const Entities = () => {
               style={{ animationDelay: `${index * 150}ms` }}
             >
               <CardHeader className="pb-4">
-                <div className="w-16 h-16 bg-primary rounded-xl flex items-center justify-center mb-4 group-hover:shadow-glow-red transition-smooth">
-                  <entity.icon className="text-primary-foreground" size={32} />
+                <div className="w-32 h-32 flex items-center justify-center mb-4 group-hover:shadow-glow-red transition-smooth">
+                  <img src={entity.logo} alt={`Logo ${entity.acronym}`} className="w-full h-full object-contain" />
                 </div>
                 <div className="mb-3">
                   <div className="text-3xl font-bold text-primary mb-2">{entity.acronym}</div>

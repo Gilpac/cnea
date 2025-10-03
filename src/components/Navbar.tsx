@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Menu, X, UserPlus, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Navbar = () => {
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const scrollToSection = (id: string) => {
@@ -45,8 +47,13 @@ const Navbar = () => {
             <Button variant="ghost" onClick={() => scrollToSection("recursos")}>
               Recursos
             </Button>
-            <Button variant="default" size="lg" onClick={() => scrollToSection("contatos")}>
-              Contacto
+            <Button variant="outline" onClick={() => navigate("/portal")}>
+              <LogIn className="mr-2 h-4 w-4" />
+              Portal do Candidato
+            </Button>
+            <Button variant="default" onClick={() => navigate("/inscricao")}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Inscrever-se
             </Button>
           </div>
 
@@ -99,11 +106,26 @@ const Navbar = () => {
               Recursos
             </Button>
             <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => {
+                navigate("/portal");
+                setIsMenuOpen(false);
+              }}
+            >
+              <LogIn className="mr-2 h-4 w-4" />
+              Portal do Candidato
+            </Button>
+            <Button
               variant="default"
               className="w-full"
-              onClick={() => scrollToSection("contatos")}
+              onClick={() => {
+                navigate("/inscricao");
+                setIsMenuOpen(false);
+              }}
             >
-              Contacto
+              <UserPlus className="mr-2 h-4 w-4" />
+              Inscrever-se
             </Button>
           </div>
         )}
