@@ -2,17 +2,23 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Menu, X, UserPlus, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import logoCnea from "@/assets/logo-cnea.png";
 
 const Navbar = () => {
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const scrollToSection = (id: string) => {
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" });
-      setIsMenuOpen(false);
+    // Se não estiver na página inicial, navega primeiro
+    if (window.location.pathname !== "/") {
+      navigate("/", { state: { scrollTo: id } });
+    } else {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth" });
+      }
     }
+    setIsMenuOpen(false);
   };
 
   return (
@@ -20,15 +26,16 @@ const Navbar = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-xl md:text-2xl">C</span>
-            </div>
+          <button 
+            onClick={() => scrollToSection("inicio")}
+            className="flex items-center space-x-3 hover:opacity-80 transition-smooth"
+          >
+            <img src={logoCnea} alt="Logo CNEA" className="w-10 h-10 md:w-12 md:h-12 object-contain" />
             <div className="flex flex-col">
               <span className="font-bold text-base md:text-lg text-foreground">CNEA</span>
               <span className="text-xs text-muted-foreground hidden sm:block">Centro de Formação</span>
             </div>
-          </div>
+          </button>
 
           {/* Desktop Navigation */}
           <div className="hidden lg:flex items-center space-x-1">
@@ -47,13 +54,12 @@ const Navbar = () => {
             <Button variant="ghost" onClick={() => scrollToSection("recursos")}>
               Recursos
             </Button>
-            <Button variant="outline" onClick={() => navigate("/portal")}>
-              <LogIn className="mr-2 h-4 w-4" />
-              Portal do Candidato
+            <Button variant="ghost" onClick={() => navigate("/fundador")}>
+              Fundador
             </Button>
-            <Button variant="default" onClick={() => navigate("/inscricao")}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Inscrever-se
+            <Button variant="default" onClick={() => navigate("/login")}>
+              <LogIn className="mr-2 h-4 w-4" />
+              Login
             </Button>
           </div>
 
@@ -106,26 +112,25 @@ const Navbar = () => {
               Recursos
             </Button>
             <Button
-              variant="outline"
+              variant="ghost"
               className="w-full justify-start"
               onClick={() => {
-                navigate("/portal");
+                navigate("/fundador");
                 setIsMenuOpen(false);
               }}
             >
-              <LogIn className="mr-2 h-4 w-4" />
-              Portal do Candidato
+              Fundador
             </Button>
             <Button
               variant="default"
               className="w-full"
               onClick={() => {
-                navigate("/inscricao");
+                navigate("/login");
                 setIsMenuOpen(false);
               }}
             >
-              <UserPlus className="mr-2 h-4 w-4" />
-              Inscrever-se
+              <LogIn className="mr-2 h-4 w-4" />
+              Login
             </Button>
           </div>
         )}

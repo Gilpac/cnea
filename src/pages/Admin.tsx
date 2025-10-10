@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, FileText, Trophy, LogOut, Menu } from "lucide-react";
+import { LogOut, Users, BookOpen, GraduationCap, Menu } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -14,39 +13,26 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import logoCnea from "@/assets/logo-cnea.png";
-import profilePhoto from "@/assets/profile-photo.png";
-import Profile from "./candidate/Profile";
-import Enrollment from "./candidate/Enrollment";
-import Results from "./candidate/Results";
+import Members from "./admin/Members";
+import Courses from "./admin/Courses";
+import Students from "./admin/Students";
 
 const menuItems = [
-  { id: "profile", title: "Perfil", icon: User },
-  { id: "enrollment", title: "Inscrição", icon: FileText },
-  { id: "results", title: "Resultado Final", icon: Trophy },
+  { id: "members", title: "Membros", icon: Users },
+  { id: "courses", title: "Cursos", icon: BookOpen },
+  { id: "students", title: "Formandos", icon: GraduationCap },
 ];
 
-const CandidateSidebar = ({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (tab: string) => void }) => {
+const AdminSidebar = ({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (tab: string) => void }) => {
   return (
     <Sidebar className="border-r">
       <SidebarContent>
-        <div className="p-4 border-b">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src={profilePhoto} />
-              <AvatarFallback>KS</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold truncate">Kelson Silva</p>
-              <p className="text-xs text-muted-foreground truncate">portal@gmail.com</p>
-            </div>
-          </div>
-        </div>
-        
         <SidebarGroup>
-          <SidebarGroupLabel>Menu do Aluno</SidebarGroupLabel>
+          <SidebarGroupLabel>Menu Administrativo</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
@@ -82,13 +68,10 @@ const MobileSidebar = ({ activeTab, setActiveTab }: { activeTab: string; setActi
       <SheetContent side="left" className="p-0 w-64">
         <div className="p-4 border-b">
           <div className="flex items-center gap-3">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src={profilePhoto} />
-              <AvatarFallback>KS</AvatarFallback>
-            </Avatar>
+            <img src={logoCnea} alt="Logo CNEA" className="w-8 h-8" />
             <div>
-              <p className="text-sm font-semibold">Kelson Silva</p>
-              <p className="text-xs text-muted-foreground">portal@gmail.com</p>
+              <h2 className="font-bold text-sm">Painel Admin</h2>
+              <p className="text-xs text-muted-foreground">CNEA</p>
             </div>
           </div>
         </div>
@@ -115,9 +98,9 @@ const MobileSidebar = ({ activeTab, setActiveTab }: { activeTab: string; setActi
   );
 };
 
-const CandidatePortal = () => {
+const Admin = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("profile");
+  const [activeTab, setActiveTab] = useState("members");
 
   const handleLogout = () => {
     navigate("/");
@@ -125,14 +108,14 @@ const CandidatePortal = () => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case "profile":
-        return <Profile />;
-      case "enrollment":
-        return <Enrollment />;
-      case "results":
-        return <Results />;
+      case "members":
+        return <Members />;
+      case "courses":
+        return <Courses />;
+      case "students":
+        return <Students />;
       default:
-        return <Profile />;
+        return <Members />;
     }
   };
 
@@ -141,7 +124,7 @@ const CandidatePortal = () => {
       <div className="min-h-screen flex w-full bg-gradient-to-b from-background to-muted">
         {/* Desktop Sidebar */}
         <div className="hidden md:block">
-          <CandidateSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+          <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
         </div>
 
         {/* Main Content */}
@@ -154,7 +137,7 @@ const CandidatePortal = () => {
                 <SidebarTrigger className="hidden md:block" />
                 <img src={logoCnea} alt="Logo CNEA" className="w-8 h-8 sm:w-10 sm:h-10" />
                 <div className="hidden sm:block">
-                  <h1 className="font-bold text-base sm:text-lg">Portal do Aluno</h1>
+                  <h1 className="font-bold text-base sm:text-lg">Painel Administrativo</h1>
                   <p className="text-xs text-muted-foreground">CNEA</p>
                 </div>
               </div>
@@ -175,4 +158,4 @@ const CandidatePortal = () => {
   );
 };
 
-export default CandidatePortal;
+export default Admin;

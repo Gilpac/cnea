@@ -1,12 +1,20 @@
 import { Facebook, Phone, Mail } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import logoCnea from "@/assets/logo-cnea.png";
 
 const Footer = () => {
+  const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
 
   const scrollToSection = (id: string) => {
-    const element = document.getElementById(id);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" });
+    // Se não estiver na página inicial, navega primeiro
+    if (window.location.pathname !== "/") {
+      navigate("/", { state: { scrollTo: id } });
+    } else {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth" });
+      }
     }
   };
 
@@ -16,14 +24,15 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12 mb-8">
           {/* About */}
           <div>
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-xl">C</span>
-              </div>
+            <button 
+              onClick={() => scrollToSection("inicio")}
+              className="flex items-center space-x-3 mb-4 hover:opacity-80 transition-smooth"
+            >
+              <img src={logoCnea} alt="Logo CNEA" className="w-10 h-10 object-contain" />
               <div>
                 <h3 className="font-bold text-lg">CNEA</h3>
               </div>
-            </div>
+            </button>
             <p className="text-secondary-foreground/80 text-sm leading-relaxed">
               Comissão Nacional dos Estagiários de Angola - Organização, certificação e 
               promoção de estágios profissionais.
