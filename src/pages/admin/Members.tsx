@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,8 @@ const Members = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
   const [members] = useState([
     { 
       id: 1, 
@@ -83,7 +86,20 @@ const Members = () => {
               <DialogTitle>Adicionar Novo Membro</DialogTitle>
               <DialogDescription>Preencha os dados do novo membro</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="space-y-2">
+                <Label htmlFor="photo">Foto de Perfil</Label>
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-20 w-20">
+                    <AvatarImage src={profilePhoto} />
+                    <AvatarFallback>Foto</AvatarFallback>
+                  </Avatar>
+                  <Button variant="outline" size="sm">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Carregar Foto
+                  </Button>
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="name">Nome Completo</Label>
                 <Input id="name" placeholder="Nome do membro" />
@@ -95,6 +111,10 @@ const Members = () => {
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" placeholder="email@cnea.ao" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Número de Telefone</Label>
+                <Input id="phone" type="tel" placeholder="+244 000 000 000" />
               </div>
               <Button onClick={handleAddMember} className="w-full">Adicionar Membro</Button>
             </div>
@@ -118,7 +138,9 @@ const Members = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((member) => (
+              {members
+                .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                .map((member) => (
                 <TableRow key={member.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -154,6 +176,35 @@ const Members = () => {
               ))}
             </TableBody>
           </Table>
+          <div className="mt-4">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.ceil(members.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
+                  <PaginationItem key={page}>
+                    <PaginationLink
+                      onClick={() => setCurrentPage(page)}
+                      isActive={currentPage === page}
+                      className="cursor-pointer"
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(members.length / itemsPerPage), p + 1))}
+                    className={currentPage === Math.ceil(members.length / itemsPerPage) ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
         </CardContent>
       </Card>
 
@@ -164,7 +215,20 @@ const Members = () => {
             <DialogDescription>Atualize os dados do membro</DialogDescription>
           </DialogHeader>
           {editingMember && (
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="space-y-2">
+                <Label htmlFor="edit-photo">Foto de Perfil</Label>
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-20 w-20">
+                    <AvatarImage src={editingMember.photo} />
+                    <AvatarFallback>{editingMember.name.split(' ').map((n: string) => n[0]).join('')}</AvatarFallback>
+                  </Avatar>
+                  <Button variant="outline" size="sm">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Alterar Foto
+                  </Button>
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-name">Nome Completo</Label>
                 <Input id="edit-name" defaultValue={editingMember.name} />
@@ -176,6 +240,10 @@ const Members = () => {
               <div className="space-y-2">
                 <Label htmlFor="edit-email">Email</Label>
                 <Input id="edit-email" type="email" defaultValue={editingMember.email} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-phone">Número de Telefone</Label>
+                <Input id="edit-phone" type="tel" placeholder="+244 000 000 000" />
               </div>
               <Button onClick={handleEditMember} className="w-full">Salvar Alterações</Button>
             </div>

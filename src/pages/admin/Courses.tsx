@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,8 @@ const Courses = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
   const [courses] = useState([
     { 
       id: 1, 
@@ -21,7 +24,8 @@ const Courses = () => {
       category: "Curso Técnico",
       duration: "2 anos",
       students: 45,
-      status: "Ativo"
+      status: "Ativo",
+      price: 150000
     },
     { 
       id: 2, 
@@ -29,7 +33,8 @@ const Courses = () => {
       category: "Formação Profissional",
       duration: "1.5 anos",
       students: 38,
-      status: "Ativo"
+      status: "Ativo",
+      price: 120000
     },
     { 
       id: 3, 
@@ -37,7 +42,8 @@ const Courses = () => {
       category: "Curso Técnico",
       duration: "2 anos",
       students: 52,
-      status: "Ativo"
+      status: "Ativo",
+      price: 180000
     },
     { 
       id: 4, 
@@ -45,7 +51,8 @@ const Courses = () => {
       category: "Ensino Médio",
       duration: "3 anos",
       students: 30,
-      status: "Em Planejamento"
+      status: "Em Planejamento",
+      price: 200000
     },
   ]);
 
@@ -97,6 +104,10 @@ const Courses = () => {
               <div className="space-y-2">
                 <Label htmlFor="duration">Duração</Label>
                 <Input id="duration" placeholder="Ex: 2 anos" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="price">Valor do Curso (Kz)</Label>
+                <Input id="price" type="number" placeholder="Ex: 150000" />
               </div>
               <Button onClick={handleAddCourse} className="w-full">Adicionar Curso</Button>
             </div>
@@ -151,19 +162,23 @@ const Courses = () => {
                 <TableHead>Nome do Curso</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead>Duração</TableHead>
+                <TableHead>Valor</TableHead>
                 <TableHead>Alunos</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {courses.map((course) => (
+              {courses
+                .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                .map((course) => (
                 <TableRow key={course.id}>
                   <TableCell className="font-medium">{course.name}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{course.category}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{course.duration}</TableCell>
+                  <TableCell className="font-medium">{course.price.toLocaleString('pt-AO')} Kz</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Users className="h-4 w-4 text-muted-foreground" />
@@ -196,6 +211,35 @@ const Courses = () => {
               ))}
             </TableBody>
           </Table>
+          <div className="mt-4">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+                {Array.from({ length: Math.ceil(courses.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
+                  <PaginationItem key={page}>
+                    <PaginationLink
+                      onClick={() => setCurrentPage(page)}
+                      isActive={currentPage === page}
+                      className="cursor-pointer"
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                <PaginationItem>
+                  <PaginationNext 
+                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(courses.length / itemsPerPage), p + 1))}
+                    className={currentPage === Math.ceil(courses.length / itemsPerPage) ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
         </CardContent>
       </Card>
 
@@ -218,6 +262,10 @@ const Courses = () => {
               <div className="space-y-2">
                 <Label htmlFor="edit-duration">Duração</Label>
                 <Input id="edit-duration" defaultValue={editingCourse.duration} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-price">Valor do Curso (Kz)</Label>
+                <Input id="edit-price" type="number" defaultValue={editingCourse.price} />
               </div>
               <Button onClick={handleEditCourse} className="w-full">Salvar Alterações</Button>
             </div>

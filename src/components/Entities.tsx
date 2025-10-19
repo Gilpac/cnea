@@ -10,7 +10,7 @@ const Entities = () => {
     {
       logo: logoInep,
       acronym: "INEP",
-      name: "Instituto Nacional de Estágios Profissionais de Angola",
+      name: "Instituto de Estágios Profissionais de Angola",
       description: "Órgão técnico e estratégico voltado para a regulação, monitoramento e desenvolvimento do sistema nacional de estágios profissionais.",
       functions: [
         "Desenvolver políticas públicas de estágio",

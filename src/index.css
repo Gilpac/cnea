@@ -13,7 +13,7 @@
     --cnea-yellow: 48 100% 50%;      /* #FFCC00 - Yellow from flag */
     --cnea-black: 0 0% 13%;          /* #212121 - Professional black */
     
-    /* Neutral palette */
+    /* Neutral palette - Light Mode */
     --background: 0 0% 100%;
     --foreground: 0 0% 13%;
     
@@ -67,6 +67,57 @@
     /* Transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dark {
+    /* Dark Mode Colors */
+    --background: 0 0% 10%;
+    --foreground: 0 0% 98%;
+    
+    --card: 0 0% 13%;
+    --card-foreground: 0 0% 98%;
+    
+    --popover: 0 0% 13%;
+    --popover-foreground: 0 0% 98%;
+    
+    /* Primary - CNEA Red (slightly brighter for dark mode) */
+    --primary: 355 73% 52%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 355 73% 58%;
+    
+    /* Secondary - Lighter for dark mode */
+    --secondary: 0 0% 20%;
+    --secondary-foreground: 0 0% 98%;
+    
+    /* Accent - CNEA Yellow (adjusted for dark mode) */
+    --accent: 48 100% 55%;
+    --accent-foreground: 0 0% 13%;
+    
+    /* Muted */
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 65%;
+    
+    /* Destructive */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Borders and inputs */
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 355 73% 52%;
+    
+    /* Gradients - Dark Mode */
+    --gradient-hero: linear-gradient(135deg, hsl(var(--cnea-red)) 0%, hsl(0 0% 5%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(var(--cnea-yellow)) 0%, hsl(48 100% 50%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(0 0% 13%) 0%, hsl(0 0% 10%) 100%);
+    
+    /* Shadows - Dark Mode */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+    --shadow-glow-red: 0 0 40px hsla(var(--cnea-red) / 0.5);
+    --shadow-glow-yellow: 0 0 40px hsla(var(--cnea-yellow) / 0.5);
   }
 }
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Menu, X, UserPlus, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import logoCnea from "@/assets/logo-cnea.png";
 
 const Navbar = () => {
@@ -57,6 +58,7 @@ const Navbar = () => {
             <Button variant="ghost" onClick={() => navigate("/fundador")}>
               Fundador
             </Button>
+            <ThemeToggle />
             <Button variant="default" onClick={() => navigate("/login")}>
               <LogIn className="mr-2 h-4 w-4" />
               Login
@@ -121,6 +123,10 @@ const Navbar = () => {
             >
               Fundador
             </Button>
+            <div className="flex items-center justify-between px-3 py-2">
+              <span className="text-sm font-medium">Tema</span>
+              <ThemeToggle />
+            </div>
             <Button
               variant="default"
               className="w-full"
