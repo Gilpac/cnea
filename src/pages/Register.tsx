@@ -74,8 +74,8 @@ const Register = () => {
     setLoading(false);
 
     toast({
-      title: "Conta criada",
-      description: "Verifique seu email para confirmar a conta.",
+      title: "Conta criada com sucesso!",
+      description: "",
     });
 
     setTimeout(() => {
