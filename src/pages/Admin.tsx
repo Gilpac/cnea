@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { LogOut, Users, BookOpen, GraduationCap, Menu } from "lucide-react";
@@ -20,6 +20,7 @@ import logoCnea from "@/assets/logo-cnea.png";
 import Members from "./admin/Members";
 import Courses from "./admin/Courses";
 import Students from "./admin/Students";
+import { supabase } from "@/lib/supabase";
 
 const menuItems = [
   { id: "members", title: "Membros", icon: Users },
@@ -120,9 +121,34 @@ const MobileSidebar = ({ activeTab, setActiveTab }: { activeTab: string; setActi
 const Admin = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("members");
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
-  const handleLogout = () => {
-    navigate("/");
+  useEffect(() => {
+    const checkAdmin = async () => {
+      setCheckingAuth(true);
+      const { data } = await supabase.auth.getUser();
+      const userId = data?.user?.id;
+      if (!userId) {
+        navigate("/login");
+        return;
+      }
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .single();
+      if (error || profile?.role !== "admin") {
+        navigate("/login");
+        return;
+      }
+      setCheckingAuth(false);
+    };
+    checkAdmin();
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
   };
 
   const renderContent = () => {
@@ -137,6 +163,14 @@ const Admin = () => {
         return <Members />;
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Verificando sessão...</p>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>

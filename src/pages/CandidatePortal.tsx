@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, FileText, Trophy, LogOut, Menu } from "lucide-react";
@@ -132,9 +133,43 @@ const MobileSidebar = ({ activeTab, setActiveTab }: { activeTab: string; setActi
 const CandidatePortal = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("profile");
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [fullName, setFullName] = useState("Kelson Silva");
+  const [emailDisplay, setEmailDisplay] = useState("portal@gmail.com");
 
-  const handleLogout = () => {
-    navigate("/");
+  useEffect(() => {
+    const checkUser = async () => {
+      setCheckingAuth(true);
+      const { data } = await supabase.auth.getUser();
+      const userId = data?.user?.id;
+      const userEmail = data?.user?.email;
+      if (!userId) {
+        navigate("/login");
+        return;
+      }
+      // busca profile para role e full_name
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("role, full_name")
+        .eq("id", userId)
+        .single();
+
+      if (!error && profile) {
+        if (profile.role === "admin") {
+          navigate("/admin");
+          return;
+        }
+        if (profile.full_name) setFullName(profile.full_name);
+      }
+      if (userEmail) setEmailDisplay(userEmail);
+      setCheckingAuth(false);
+    };
+    checkUser();
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
   };
 
   const renderContent = () => {
@@ -149,6 +184,14 @@ const CandidatePortal = () => {
         return <Profile />;
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p>Verificando sessão...</p>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -176,10 +219,16 @@ const CandidatePortal = () => {
                   </div>
                 </div>
               </div>
-              <Button variant="outline" onClick={handleLogout} size="sm" className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50 transition-all">
-                <LogOut className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Sair</span>
-              </Button>
+              <div className="flex items-center gap-3">
+                <div className="hidden sm:flex flex-col text-right mr-3">
+                  <span className="text-sm font-bold truncate">{fullName}</span>
+                  <span className="text-xs text-muted-foreground truncate">{emailDisplay}</span>
+                </div>
+                <Button variant="outline" onClick={handleLogout} size="sm" className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50 transition-all">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Sair</span>
+                </Button>
+              </div>
             </div>
           </header>
 

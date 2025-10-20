@@ -1,3 +1,4 @@
+// ...existing code...
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
 import logoCnea from "@/assets/logo-cnea.png";
+import { supabase } from "@/lib/supabase";
 
 const Register = () => {
   const navigate = useNavigate();
@@ -17,6 +19,7 @@ const Register = () => {
     password: "",
     confirmPassword: "",
   });
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -25,9 +28,9 @@ const Register = () => {
     });
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (formData.password !== formData.confirmPassword) {
       toast({
         title: "Erro",
@@ -37,11 +40,44 @@ const Register = () => {
       return;
     }
 
-    toast({
-      title: "Conta criada com sucesso!",
-      description: "Você já pode fazer login.",
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
     });
-    
+
+    if (error) {
+      setLoading(false);
+      toast({
+        title: "Erro ao criar conta",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Se o user object estiver disponível, cria o perfil
+    try {
+      const userId = data?.user?.id;
+      if (userId) {
+        await supabase.from('profiles').insert({
+          id: userId,
+          full_name: formData.name,
+          role: 'student',
+        });
+      }
+    } catch (err) {
+      // Não bloquear o fluxo se inserção falhar — apenas regista no console
+      console.warn('Não foi possível inserir profile:', err);
+    }
+
+    setLoading(false);
+
+    toast({
+      title: "Conta criada",
+      description: "Verifique seu email para confirmar a conta.",
+    });
+
     setTimeout(() => {
       navigate("/login");
     }, 1500);
@@ -113,8 +149,8 @@ const Register = () => {
                 />
               </div>
 
-              <Button type="submit" className="w-full" size="lg">
-                Criar Conta
+              <Button type="submit" className="w-full" size="lg" disabled={loading}>
+                {loading ? "A processar..." : "Criar Conta"}
               </Button>
 
               <div className="text-center text-sm">
@@ -147,3 +183,4 @@ const Register = () => {
 };
 
 export default Register;
+// ...existing code...

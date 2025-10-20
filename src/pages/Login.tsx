@@ -1,3 +1,4 @@
+// ...existing code...
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,35 +8,61 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
 import logoCnea from "@/assets/logo-cnea.png";
+import { supabase } from "@/lib/supabase";
 
 const Login = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Simulação de login
-    if (email === "cnea@gmail.com" && password === "123") {
-      toast({
-        title: "Login bem-sucedido!",
-        description: "Bem-vindo, Administrador.",
-      });
-      navigate("/admin");
-    } else if (email === "portal@gmail.com" && password === "123") {
-      toast({
-        title: "Login bem-sucedido!",
-        description: "Bem-vindo ao portal do aluno.",
-      });
-      navigate("/portal");
-    } else {
+    setLoading(true);
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    setLoading(false);
+
+    if (error) {
       toast({
         title: "Erro ao fazer login",
-        description: "Email ou senha incorretos.",
+        description: error.message,
         variant: "destructive",
       });
+      return;
+    }
+
+    // Obtém id do user (pode vir em data.user)
+    const userId = data?.user?.id;
+
+    // Busca profile para saber o role
+    let role = 'student';
+    if (userId) {
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      if (!profileError && profiles?.role) {
+        role = profiles.role;
+      }
+    }
+
+    toast({
+      title: "Login bem-sucedido!",
+      description: "Sessão iniciada.",
+    });
+
+    if (role === 'admin') {
+      navigate("/admin");
+    } else {
+      navigate("/portal");
     }
   };
 
@@ -92,8 +119,8 @@ const Login = () => {
                 </Button>
               </div>
 
-              <Button type="submit" className="w-full" size="lg">
-                Entrar
+              <Button type="submit" className="w-full" size="lg" disabled={loading}>
+                {loading ? "A processar..." : "Entrar"}
               </Button>
 
               <div className="text-center text-sm">
@@ -126,3 +153,4 @@ const Login = () => {
 };
 
 export default Login;
+// ...existing code...

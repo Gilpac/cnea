@@ -17,6 +17,8 @@ import LoadingScreen from "@/components/LoadingScreen";
 import InstallPrompt from "@/components/InstallPrompt";
 import { useEffect } from "react";
 
+
+
 const queryClient = new QueryClient();
 
 const App = () => {

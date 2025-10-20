@@ -1,3 +1,4 @@
+// ...existing code...
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,21 +8,39 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Mail } from "lucide-react";
 import logoCnea from "@/assets/logo-cnea.png";
+import { supabase } from "@/lib/supabase";
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setLoading(true);
+
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + "/reset-callback",
+    });
+
+    setLoading(false);
+
+    if (error) {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     toast({
       title: "Email enviado!",
       description: "Verifique sua caixa de entrada para redefinir sua senha.",
     });
-    
+
     setIsSubmitted(true);
   };
 
@@ -56,9 +75,9 @@ const ForgotPassword = () => {
                   />
                 </div>
 
-                <Button type="submit" className="w-full" size="lg">
+                <Button type="submit" className="w-full" size="lg" disabled={loading}>
                   <Mail className="mr-2 h-4 w-4" />
-                  Enviar instruções
+                  {loading ? "A processar..." : "Enviar instruções"}
                 </Button>
 
                 <div className="text-center text-sm">
@@ -111,3 +130,4 @@ const ForgotPassword = () => {
 };
 
 export default ForgotPassword;
+// ...existing code...
