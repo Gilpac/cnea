@@ -1,77 +1,167 @@
-import { useState } from "react";
+// ...existing code...
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/lib/supabase";
+
+type Course = {
+  id: string;
+  name: string;
+  category?: string | null;
+  duration?: string | null;
+  price?: number | null;
+  students?: number | null;
+  status?: string | null;
+  created_at?: string | null;
+};
 
 const Courses = () => {
   const { toast } = useToast();
+
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(false);
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<any>(null);
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
-  const [courses] = useState([
-    { 
-      id: 1, 
-      name: "Tecnologia da Informação", 
-      category: "Curso Técnico",
-      duration: "2 anos",
-      students: 45,
-      status: "Ativo",
-      price: 150000
-    },
-    { 
-      id: 2, 
-      name: "Gestão e Administração", 
-      category: "Formação Profissional",
-      duration: "1.5 anos",
-      students: 38,
-      status: "Ativo",
-      price: 120000
-    },
-    { 
-      id: 3, 
-      name: "Saúde e Enfermagem", 
-      category: "Curso Técnico",
-      duration: "2 anos",
-      students: 52,
-      status: "Ativo",
-      price: 180000
-    },
-    { 
-      id: 4, 
-      name: "Engenharia Civil", 
-      category: "Ensino Médio",
-      duration: "3 anos",
-      students: 30,
-      status: "Em Planejamento",
-      price: 200000
-    },
-  ]);
 
-  const handleAddCourse = () => {
-    toast({
-      title: "Curso adicionado!",
-      description: "O novo curso foi adicionado com sucesso.",
-    });
-    setIsAddDialogOpen(false);
+  const [addForm, setAddForm] = useState({
+    name: "",
+    category: "",
+    duration: "",
+    price: "",
+    students: "0",
+    status: "Ativo",
+  });
+
+  const [editForm, setEditForm] = useState({
+    name: "",
+    category: "",
+    duration: "",
+    price: "",
+    students: "0",
+    status: "Ativo",
+  });
+
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  const fetchCourses = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("courses")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setLoading(false);
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      return;
+    }
+    setCourses((data as Course[]) || []);
   };
 
-  const handleEditCourse = () => {
-    toast({
-      title: "Curso atualizado!",
-      description: "As informações do curso foram atualizadas.",
+  const handleAddCourse = async () => {
+    if (!addForm.name.trim()) {
+      toast({ title: "Erro", description: "Nome do curso é obrigatório", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("courses")
+      .insert([{
+        name: addForm.name,
+        category: addForm.category || null,
+        duration: addForm.duration || null,
+        price: addForm.price ? Number(addForm.price) : null,
+        students: addForm.students ? Number(addForm.students) : 0,
+        status: addForm.status || "Ativo",
+      }])
+      .select()
+      .single();
+    setLoading(false);
+
+    if (error || !data) {
+      toast({ title: "Erro", description: error?.message || "Não foi possível adicionar", variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Curso adicionado!", description: "O novo curso foi adicionado com sucesso." });
+    setIsAddDialogOpen(false);
+    setAddForm({ name: "", category: "", duration: "", price: "", students: "0", status: "Ativo" });
+    fetchCourses();
+  };
+
+  const openEditDialog = (c: Course) => {
+    setEditingCourse(c);
+    setEditForm({
+      name: c.name || "",
+      category: c.category || "",
+      duration: c.duration || "",
+      price: c.price ? String(c.price) : "",
+      students: c.students ? String(c.students) : "0",
+      status: c.status || "Ativo",
     });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditCourse = async () => {
+    if (!editingCourse) return;
+    if (!editForm.name.trim()) {
+      toast({ title: "Erro", description: "Nome do curso é obrigatório", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase
+      .from("courses")
+      .update({
+        name: editForm.name,
+        category: editForm.category || null,
+        duration: editForm.duration || null,
+        price: editForm.price ? Number(editForm.price) : null,
+        students: editForm.students ? Number(editForm.students) : 0,
+        status: editForm.status || "Ativo",
+      })
+      .eq("id", editingCourse.id);
+    setLoading(false);
+
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Curso atualizado!", description: "As informações do curso foram atualizadas." });
     setIsEditDialogOpen(false);
     setEditingCourse(null);
+    fetchCourses();
   };
+
+  const handleDeleteCourse = async (courseId: string) => {
+    if (!confirm("Tem certeza que deseja remover este curso?")) return;
+    setLoading(true);
+    const { error } = await supabase.from("courses").delete().eq("id", courseId);
+    setLoading(false);
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Curso removido", description: "Curso removido com sucesso." });
+    fetchCourses();
+  };
+
+  const totalPages = Math.max(1, Math.ceil(courses.length / itemsPerPage));
+  const visibleCourses = courses.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="space-y-6">
@@ -90,26 +180,35 @@ const Courses = () => {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Adicionar Novo Curso</DialogTitle>
-              <DialogDescription>Preencha os dados do novo curso</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="courseName">Nome do Curso</Label>
-                <Input id="courseName" placeholder="Nome do curso" />
+                <Input id="courseName" value={addForm.name} onChange={(e) => setAddForm(f => ({ ...f, name: e.target.value }))} placeholder="Nome do curso" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category">Categoria</Label>
-                <Input id="category" placeholder="Ex: Curso Técnico" />
+                <Input id="category" value={addForm.category} onChange={(e) => setAddForm(f => ({ ...f, category: e.target.value }))} placeholder="Ex: Curso Técnico" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="duration">Duração</Label>
-                <Input id="duration" placeholder="Ex: 2 anos" />
+                <Input id="duration" value={addForm.duration} onChange={(e) => setAddForm(f => ({ ...f, duration: e.target.value }))} placeholder="Ex: 2 anos" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label htmlFor="price">Valor do Curso (Kz)</Label>
+                  <Input id="price" type="number" value={addForm.price} onChange={(e) => setAddForm(f => ({ ...f, price: e.target.value }))} placeholder="Ex: 150000" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="students">Alunos</Label>
+                  <Input id="students" type="number" value={addForm.students} onChange={(e) => setAddForm(f => ({ ...f, students: e.target.value }))} />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="price">Valor do Curso (Kz)</Label>
-                <Input id="price" type="number" placeholder="Ex: 150000" />
+                <Label htmlFor="status">Status</Label>
+                <Input id="status" value={addForm.status} onChange={(e) => setAddForm(f => ({ ...f, status: e.target.value }))} />
               </div>
-              <Button onClick={handleAddCourse} className="w-full">Adicionar Curso</Button>
+              <Button onClick={handleAddCourse} className="w-full" disabled={loading}>{loading ? "Salvando..." : "Adicionar Curso"}</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -137,7 +236,7 @@ const Courses = () => {
             <CardTitle className="text-sm font-medium">Total de Alunos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{courses.reduce((acc, c) => acc + c.students, 0)}</div>
+            <div className="text-2xl font-bold">{courses.reduce((acc, c) => acc + (c.students || 0), 0)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -145,7 +244,7 @@ const Courses = () => {
             <CardTitle className="text-sm font-medium">Média por Curso</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{Math.round(courses.reduce((acc, c) => acc + c.students, 0) / courses.length)}</div>
+            <div className="text-2xl font-bold">{courses.length ? Math.round(courses.reduce((acc, c) => acc + (c.students || 0), 0) / courses.length) : 0}</div>
           </CardContent>
         </Card>
       </div>
@@ -169,20 +268,18 @@ const Courses = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {courses
-                .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-                .map((course) => (
+              {visibleCourses.map((course) => (
                 <TableRow key={course.id}>
                   <TableCell className="font-medium">{course.name}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{course.category}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{course.duration}</TableCell>
-                  <TableCell className="font-medium">{course.price.toLocaleString('pt-AO')} Kz</TableCell>
+                  <TableCell className="font-medium">{(course.price || 0).toLocaleString('pt-AO')} Kz</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Users className="h-4 w-4 text-muted-foreground" />
-                      <span>{course.students}</span>
+                      <span>{course.students || 0}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -195,14 +292,11 @@ const Courses = () => {
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        onClick={() => {
-                          setEditingCourse(course);
-                          setIsEditDialogOpen(true);
-                        }}
+                        onClick={() => openEditDialog(course)}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteCourse(course.id)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -211,6 +305,7 @@ const Courses = () => {
               ))}
             </TableBody>
           </Table>
+
           <div className="mt-4">
             <Pagination>
               <PaginationContent>
@@ -220,7 +315,7 @@ const Courses = () => {
                     className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                   />
                 </PaginationItem>
-                {Array.from({ length: Math.ceil(courses.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                   <PaginationItem key={page}>
                     <PaginationLink
                       onClick={() => setCurrentPage(page)}
@@ -233,8 +328,8 @@ const Courses = () => {
                 ))}
                 <PaginationItem>
                   <PaginationNext 
-                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(courses.length / itemsPerPage), p + 1))}
-                    className={currentPage === Math.ceil(courses.length / itemsPerPage) ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
                   />
                 </PaginationItem>
               </PaginationContent>
@@ -243,31 +338,40 @@ const Courses = () => {
         </CardContent>
       </Card>
 
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={isEditDialogOpen} onOpenChange={(v) => { setIsEditDialogOpen(v); if (!v) setEditingCourse(null); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Editar Curso</DialogTitle>
-            <DialogDescription>Atualize os dados do curso</DialogDescription>
           </DialogHeader>
           {editingCourse && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-courseName">Nome do Curso</Label>
-                <Input id="edit-courseName" defaultValue={editingCourse.name} />
+                <Input id="edit-courseName" value={editForm.name} onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-category">Categoria</Label>
-                <Input id="edit-category" defaultValue={editingCourse.category} />
+                <Input id="edit-category" value={editForm.category} onChange={(e) => setEditForm(f => ({ ...f, category: e.target.value }))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-duration">Duração</Label>
-                <Input id="edit-duration" defaultValue={editingCourse.duration} />
+                <Input id="edit-duration" value={editForm.duration} onChange={(e) => setEditForm(f => ({ ...f, duration: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-price">Valor do Curso (Kz)</Label>
+                  <Input id="edit-price" type="number" value={editForm.price} onChange={(e) => setEditForm(f => ({ ...f, price: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-students">Alunos</Label>
+                  <Input id="edit-students" type="number" value={editForm.students} onChange={(e) => setEditForm(f => ({ ...f, students: e.target.value }))} />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-price">Valor do Curso (Kz)</Label>
-                <Input id="edit-price" type="number" defaultValue={editingCourse.price} />
+                <Label htmlFor="edit-status">Status</Label>
+                <Input id="edit-status" value={editForm.status} onChange={(e) => setEditForm(f => ({ ...f, status: e.target.value }))} />
               </div>
-              <Button onClick={handleEditCourse} className="w-full">Salvar Alterações</Button>
+              <Button onClick={handleEditCourse} className="w-full" disabled={loading}>{loading ? "Salvando..." : "Salvar Alterações"}</Button>
             </div>
           )}
         </DialogContent>
@@ -277,3 +381,4 @@ const Courses = () => {
 };
 
 export default Courses;
+// ...existing code...
