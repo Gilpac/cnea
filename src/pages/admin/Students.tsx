@@ -1,3 +1,4 @@
+// ...existing code...
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,10 +19,10 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,8 +32,19 @@ import { supabase } from "@/lib/supabase";
 type Student = {
   id: string;
   full_name: string;
+  birth_date?: string | null;
+  gender?: string | null;
+  id_number?: string | null;
+  nationality?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  municipality?: string | null;
+  province?: string | null;
   email?: string | null;
+  institution?: string | null;
   course?: string | null;
+  year?: number | null;
+  shift?: string | null;
   final_grade?: number | null;
   status?: string | null;
   photo_url?: string | null;
@@ -75,32 +87,54 @@ const Students = () => {
 
   const [loading, setLoading] = useState(false);
 
-  // Add form state + file refs
+  // Add form + refs
   const [addForm, setAddForm] = useState({
     full_name: "",
+    birth_date: "",
+    gender: "",
+    id_number: "",
+    nationality: "Angolana",
+    phone: "",
+    address: "",
+    municipality: "",
+    province: "",
     email: "",
+    institution: "",
     course: "",
+    year: "",
+    shift: "",
     final_grade: "",
     status: "Ativo",
   });
   const addPhotoRef = useRef<HTMLInputElement | null>(null);
-  const addIdDocRef = useRef<HTMLInputElement | null>(null);
+  const addIdRef = useRef<HTMLInputElement | null>(null);
   const addCertificateRef = useRef<HTMLInputElement | null>(null);
   const addCvRef = useRef<HTMLInputElement | null>(null);
   const addPassportRef = useRef<HTMLInputElement | null>(null);
   const addPaymentRef = useRef<HTMLInputElement | null>(null);
   const [addPhotoFile, setAddPhotoFile] = useState<File | null>(null);
 
-  // Edit form state + file refs
+  // Edit form + refs
   const [editForm, setEditForm] = useState({
     full_name: "",
+    birth_date: "",
+    gender: "",
+    id_number: "",
+    nationality: "",
+    phone: "",
+    address: "",
+    municipality: "",
+    province: "",
     email: "",
+    institution: "",
     course: "",
+    year: "",
+    shift: "",
     final_grade: "",
     status: "",
   });
   const editPhotoRef = useRef<HTMLInputElement | null>(null);
-  const editIdDocRef = useRef<HTMLInputElement | null>(null);
+  const editIdRef = useRef<HTMLInputElement | null>(null);
   const editCertificateRef = useRef<HTMLInputElement | null>(null);
   const editCvRef = useRef<HTMLInputElement | null>(null);
   const editPassportRef = useRef<HTMLInputElement | null>(null);
@@ -122,7 +156,7 @@ const Students = () => {
     setStudents((data as Student[]) || []);
   };
 
-  // helper: convert file -> dataURL fallback
+  // helper: file -> dataURL fallback
   const fileToDataUrl = (f: File) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -131,7 +165,7 @@ const Students = () => {
       reader.readAsDataURL(f);
     });
 
-  // upload file to storage 'student-docs' or fallback to dataURL
+  // upload helper (bucket "student-docs")
   const uploadFile = async (studentId: string, file: File | null, folder: string) => {
     if (!file) return null;
     try {
@@ -142,8 +176,7 @@ const Students = () => {
       });
       if (!uploadError && uploadData) {
         const { data: urlData } = supabase.storage.from("student-docs").getPublicUrl(path);
-        const publicUrl = (urlData as any)?.publicUrl || null;
-        return publicUrl;
+        return (urlData as any)?.publicUrl || null;
       }
       console.warn("Upload error:", uploadError);
       return await fileToDataUrl(file);
@@ -163,13 +196,23 @@ const Students = () => {
       return;
     }
     setLoading(true);
-    // insert base student
     const { data, error } = await supabase
       .from("students")
       .insert({
         full_name: addForm.full_name,
+        birth_date: addForm.birth_date || null,
+        gender: addForm.gender || null,
+        id_number: addForm.id_number || null,
+        nationality: addForm.nationality || null,
+        phone: addForm.phone || null,
+        address: addForm.address || null,
+        municipality: addForm.municipality || null,
+        province: addForm.province || null,
         email: addForm.email || null,
+        institution: addForm.institution || null,
         course: addForm.course || null,
+        year: addForm.year ? Number(addForm.year) : null,
+        shift: addForm.shift || null,
         final_grade: addForm.final_grade ? Number(addForm.final_grade) : null,
         status: addForm.status || "Ativo",
         has_certificate: false,
@@ -185,45 +228,33 @@ const Students = () => {
 
     const studentId = (data as Student).id;
 
-    // upload photo and documents (if provided)
+    // upload photo
     if (addPhotoFile) {
       const url = await uploadFile(studentId, addPhotoFile, "photo");
       if (url) await supabase.from("students").update({ photo_url: url }).eq("id", studentId);
     }
 
-    const idDocFile = addIdDocRef.current?.files?.[0] || null;
-    if (idDocFile) {
-      const url = await uploadFile(studentId, idDocFile, "id_document");
-      if (url) await supabase.from("students").update({ "documents->>id_document_url": url }).eq("id", studentId);
-      // better: update json field properly
-      await supabase.from("students").update({
-        documents: { ...(data as any).documents, id_document_url: url },
-      }).eq("id", studentId);
+    // upload documents
+    const idFile = addIdRef.current?.files?.[0] || null;
+    if (idFile) {
+      const url = await uploadFile(studentId, idFile, "id_document");
+      if (url) await supabase.from("students").update({ documents: { ...(data as any).documents, id_document_url: url } }).eq("id", studentId);
     }
-
-    const certificateFile = addCertificateRef.current?.files?.[0] || null;
-    if (certificateFile) {
-      const url = await uploadFile(studentId, certificateFile, "certificate");
-      if (url) {
-        await supabase.from("students").update({
-          documents: { ...(data as any).documents, certificate_url: url },
-          has_certificate: true,
-        }).eq("id", studentId);
-      }
+    const certFile = addCertificateRef.current?.files?.[0] || null;
+    if (certFile) {
+      const url = await uploadFile(studentId, certFile, "certificate");
+      if (url) await supabase.from("students").update({ documents: { ...(data as any).documents, certificate_url: url }, has_certificate: true }).eq("id", studentId);
     }
-
     const cvFile = addCvRef.current?.files?.[0] || null;
     if (cvFile) {
       const url = await uploadFile(studentId, cvFile, "cv");
       if (url) await supabase.from("students").update({ documents: { ...(data as any).documents, cv_url: url } }).eq("id", studentId);
     }
-
     const passportFile = addPassportRef.current?.files?.[0] || null;
     if (passportFile) {
       const url = await uploadFile(studentId, passportFile, "passport");
       if (url) await supabase.from("students").update({ documents: { ...(data as any).documents, passport_url: url } }).eq("id", studentId);
     }
-
     const paymentFile = addPaymentRef.current?.files?.[0] || null;
     if (paymentFile) {
       const url = await uploadFile(studentId, paymentFile, "payment");
@@ -232,7 +263,24 @@ const Students = () => {
 
     setLoading(false);
     setIsAddDialogOpen(false);
-    setAddForm({ full_name: "", email: "", course: "", final_grade: "", status: "Ativo" });
+    setAddForm({
+      full_name: "",
+      birth_date: "",
+      gender: "",
+      id_number: "",
+      nationality: "Angolana",
+      phone: "",
+      address: "",
+      municipality: "",
+      province: "",
+      email: "",
+      institution: "",
+      course: "",
+      year: "",
+      shift: "",
+      final_grade: "",
+      status: "Ativo",
+    });
     setAddPhotoFile(null);
     toast({ title: "Aluno adicionado", description: "Formando criado com sucesso." });
     fetchStudents();
@@ -242,8 +290,19 @@ const Students = () => {
     setEditingStudent(student);
     setEditForm({
       full_name: student.full_name || "",
+      birth_date: student.birth_date || "",
+      gender: student.gender || "",
+      id_number: student.id_number || "",
+      nationality: student.nationality || "",
+      phone: student.phone || "",
+      address: student.address || "",
+      municipality: student.municipality || "",
+      province: student.province || "",
       email: student.email || "",
+      institution: student.institution || "",
       course: student.course || "",
+      year: student.year ? String(student.year) : "",
+      shift: student.shift || "",
       final_grade: student.final_grade ? String(student.final_grade) : "",
       status: student.status || "Ativo",
     });
@@ -257,8 +316,19 @@ const Students = () => {
       .from("students")
       .update({
         full_name: editForm.full_name,
+        birth_date: editForm.birth_date || null,
+        gender: editForm.gender || null,
+        id_number: editForm.id_number || null,
+        nationality: editForm.nationality || null,
+        phone: editForm.phone || null,
+        address: editForm.address || null,
+        municipality: editForm.municipality || null,
+        province: editForm.province || null,
         email: editForm.email || null,
+        institution: editForm.institution || null,
         course: editForm.course || null,
+        year: editForm.year ? Number(editForm.year) : null,
+        shift: editForm.shift || null,
         final_grade: editForm.final_grade ? Number(editForm.final_grade) : null,
         status: editForm.status || null,
       })
@@ -275,15 +345,14 @@ const Students = () => {
       if (url) await supabase.from("students").update({ photo_url: url }).eq("id", editingStudent.id);
     }
 
-    // other doc uploads if present
-    const idDocFile = editIdDocRef.current?.files?.[0] || null;
-    if (idDocFile) {
-      const url = await uploadFile(editingStudent.id, idDocFile, "id_document");
+    const idFile = editIdRef.current?.files?.[0] || null;
+    if (idFile) {
+      const url = await uploadFile(editingStudent.id, idFile, "id_document");
       if (url) await supabase.from("students").update({ documents: { ...(editingStudent as any).documents, id_document_url: url } }).eq("id", editingStudent.id);
     }
-    const certificateFile = editCertificateRef.current?.files?.[0] || null;
-    if (certificateFile) {
-      const url = await uploadFile(editingStudent.id, certificateFile, "certificate");
+    const certFile = editCertificateRef.current?.files?.[0] || null;
+    if (certFile) {
+      const url = await uploadFile(editingStudent.id, certFile, "certificate");
       if (url) await supabase.from("students").update({ documents: { ...(editingStudent as any).documents, certificate_url: url }, has_certificate: true }).eq("id", editingStudent.id);
     }
     const cvFile = editCvRef.current?.files?.[0] || null;
@@ -311,6 +380,7 @@ const Students = () => {
   };
 
   const handleDeleteStudent = async (studentId: string) => {
+    // usa diálogo em vez do confirm global se preferires; aqui mantemos mínimo
     if (!confirm("Tem certeza que deseja remover este aluno?")) return;
     setLoading(true);
     const { error } = await supabase.from("students").delete().eq("id", studentId);
@@ -366,7 +436,7 @@ const Students = () => {
           <p className="text-muted-foreground">Gerencie todos os alunos cadastrados</p>
         </div>
 
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <Dialog open={isAddDialogOpen} onOpenChange={(v) => setIsAddDialogOpen(v)}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -398,53 +468,44 @@ const Students = () => {
                 </div>
               </div>
 
-              {/* Dados essenciais */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Nome Completo *</Label>
-                  <Input value={addForm.full_name} onChange={(e) => setAddForm({ ...addForm, full_name: e.target.value })} />
+              {/* Dados pessoais */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">1. Dados Pessoais</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2"><Label>Nome Completo *</Label><Input value={addForm.full_name} onChange={(e) => setAddForm({ ...addForm, full_name: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Data de Nascimento</Label><Input type="date" value={addForm.birth_date} onChange={(e) => setAddForm({ ...addForm, birth_date: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Sexo/Gênero</Label><Select onValueChange={(v) => setAddForm({ ...addForm, gender: v })}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent><SelectItem value="masculino">Masculino</SelectItem><SelectItem value="feminino">Feminino</SelectItem><SelectItem value="outro">Outro</SelectItem></SelectContent></Select></div>
+                  <div className="space-y-2"><Label>Nº do Bilhete</Label><Input value={addForm.id_number} onChange={(e) => setAddForm({ ...addForm, id_number: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Nacionalidade</Label><Input value={addForm.nationality} onChange={(e) => setAddForm({ ...addForm, nationality: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Contacto</Label><Input type="tel" value={addForm.phone} onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })} /></div>
+                  <div className="space-y-2 md:col-span-2"><Label>Endereço</Label><Input value={addForm.address} onChange={(e) => setAddForm({ ...addForm, address: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Município</Label><Input value={addForm.municipality} onChange={(e) => setAddForm({ ...addForm, municipality: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Província</Label><Input value={addForm.province} onChange={(e) => setAddForm({ ...addForm, province: e.target.value })} /></div>
+                  <div className="space-y-2 md:col-span-2"><Label>Email</Label><Input type="email" value={addForm.email} onChange={(e) => setAddForm({ ...addForm, email: e.target.value })} /></div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input value={addForm.email} onChange={(e) => setAddForm({ ...addForm, email: e.target.value })} />
+              </div>
+
+              {/* Dados académicos */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">2. Dados Académicos</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2"><Label>Instituição</Label><Input value={addForm.institution} onChange={(e) => setAddForm({ ...addForm, institution: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Curso</Label><Select onValueChange={(v) => setAddForm({ ...addForm, course: v })}><SelectTrigger><SelectValue placeholder="Selecione o curso" /></SelectTrigger><SelectContent>{availableCourses.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label>Ano</Label><Input type="number" value={addForm.year} onChange={(e) => setAddForm({ ...addForm, year: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Turno</Label><Select onValueChange={(v) => setAddForm({ ...addForm, shift: v })}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent><SelectItem value="manha">Manhã</SelectItem><SelectItem value="tarde">Tarde</SelectItem><SelectItem value="noite">Noite</SelectItem></SelectContent></Select></div>
+                  <div className="space-y-2"><Label>Nota Final</Label><Input type="number" value={addForm.final_grade} onChange={(e) => setAddForm({ ...addForm, final_grade: e.target.value })} /></div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Curso</Label>
-                  <Select onValueChange={(v) => setAddForm({ ...addForm, course: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecione o curso" /></SelectTrigger>
-                    <SelectContent>
-                      {availableCourses.map((c) => (<SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Nota Final</Label>
-                  <Input value={addForm.final_grade} onChange={(e) => setAddForm({ ...addForm, final_grade: e.target.value })} />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Documentos</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-xs">Bilhete de Identidade</Label>
-                      <input ref={addIdDocRef} type="file" accept=".pdf,.jpg,.jpeg,.png" />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Declaração / Certificado</Label>
-                      <input ref={addCertificateRef} type="file" accept=".pdf,.jpg,.jpeg,.png" />
-                    </div>
-                    <div>
-                      <Label className="text-xs">CV</Label>
-                      <input ref={addCvRef} type="file" accept=".pdf,.doc,.docx" />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Fotografia tipo passe</Label>
-                      <input ref={addPassportRef} type="file" accept=".jpg,.jpeg,.png" />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Comprovativo Pagamento</Label>
-                      <input ref={addPaymentRef} type="file" accept=".pdf,.jpg,.jpeg,.png" />
-                    </div>
-                  </div>
+              </div>
+
+              {/* Documentos */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">3. Documentos</h3>
+                <div className="grid grid-cols-1 gap-4">
+                  <div><Label>Bilhete de Identidade</Label><input ref={addIdRef} type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
+                  <div><Label>Declaração / Certificado</Label><input ref={addCertificateRef} type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
+                  <div><Label>CV</Label><input ref={addCvRef} type="file" accept=".pdf,.doc,.docx" /></div>
+                  <div><Label>Fotografia tipo passe</Label><input ref={addPassportRef} type="file" accept=".jpg,.jpeg,.png" /></div>
+                  <div><Label>Comprovativo de pagamento</Label><input ref={addPaymentRef} type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
                 </div>
               </div>
 
@@ -454,6 +515,7 @@ const Students = () => {
         </Dialog>
       </div>
 
+      {/* estatísticas e lista (mantém resto do layout) */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total de Alunos</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{students.length}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Alunos Ativos</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{students.filter(s => s.status === "Ativo").length}</div></CardContent></Card>
@@ -470,54 +532,41 @@ const Students = () => {
             <Input placeholder="Pesquisar por nome, email ou curso..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
           </div>
         </CardHeader>
-
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Aluno</TableHead>
-                  <TableHead>Curso</TableHead>
-                  <TableHead>Nota Final</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-
+              <TableHeader><TableRow><TableHead>Aluno</TableHead><TableHead>Curso</TableHead><TableHead>Nota Final</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
               <TableBody>
-                {visibleStudents.map((student) => (
-                  <TableRow key={student.id}>
+                {visibleStudents.map(s => (
+                  <TableRow key={s.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <Avatar><AvatarImage src={student.photo_url || profilePhoto} alt={student.full_name} /><AvatarFallback>{(student.full_name || "").split(" ").map(n => n[0]).join("")}</AvatarFallback></Avatar>
-                        <div>
-                          <div className="font-medium">{student.full_name}</div>
-                          <div className="text-sm text-muted-foreground">{student.email}</div>
-                        </div>
+                        <Avatar><AvatarImage src={s.photo_url || profilePhoto} alt={s.full_name} /><AvatarFallback>{(s.full_name || "").split(" ").map(n => n[0]).join("")}</AvatarFallback></Avatar>
+                        <div><div className="font-medium">{s.full_name}</div><div className="text-sm text-muted-foreground">{s.email}</div></div>
                       </div>
                     </TableCell>
-                    <TableCell><Badge variant="outline">{student.course}</Badge></TableCell>
-                    <TableCell>{student.final_grade ?? <span className="text-muted-foreground">-</span>}</TableCell>
-                    <TableCell><Badge variant={student.status === "Ativo" ? "default" : "secondary"}>{student.status}</Badge></TableCell>
+                    <TableCell><Badge variant="outline">{s.course}</Badge></TableCell>
+                    <TableCell>{s.final_grade ?? <span className="text-muted-foreground">-</span>}</TableCell>
+                    <TableCell><Badge variant={s.status === "Ativo" ? "default" : "secondary"}>{s.status}</Badge></TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" title="Ver Documentos" onClick={() => handleViewDocuments(student)}><Eye className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="sm" title="Ver Documentos" onClick={() => handleViewDocuments(s)}><Eye className="h-4 w-4" /></Button>
 
-                        <Dialog open={isCertificateDialogOpen && certificateStudent?.id === student.id} onOpenChange={(open) => { setIsCertificateDialogOpen(open); if (!open) setCertificateStudent(null); }}>
+                        <Dialog open={isCertificateDialogOpen && certificateStudent?.id === s.id} onOpenChange={(open) => { setIsCertificateDialogOpen(open); if (!open) setCertificateStudent(null); }}>
                           <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm" title="Anexar Certificado" onClick={() => setCertificateStudent(student)}><FileText className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" title="Anexar Certificado" onClick={() => setCertificateStudent(s)}><FileText className="h-4 w-4" /></Button>
                           </DialogTrigger>
                           <DialogContent>
-                            <DialogHeader><DialogTitle>Anexar Certificado</DialogTitle><DialogDescription>Anexe o certificado de conclusão para {student.full_name}</DialogDescription></DialogHeader>
+                            <DialogHeader><DialogTitle>Anexar Certificado</DialogTitle><DialogDescription>Anexe o certificado de conclusão para {s.full_name}</DialogDescription></DialogHeader>
                             <div className="space-y-4">
-                              <div className="space-y-2"><Label>Certificado (PDF)</Label><input id="cert-file" type="file" accept=".pdf" /></div>
-                              <Button onClick={() => handleAttachCertificate(student, document.getElementById("cert-file") as HTMLInputElement | null)} className="w-full">Anexar Certificado</Button>
+                              <div><Label>Certificado (PDF)</Label><input id="cert-file" type="file" accept=".pdf" /></div>
+                              <Button onClick={() => handleAttachCertificate(s, document.getElementById("cert-file") as HTMLInputElement | null)} className="w-full">Anexar Certificado</Button>
                             </div>
                           </DialogContent>
                         </Dialog>
 
-                        <Button variant="ghost" size="sm" onClick={() => { openEditDialog(student); }}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteStudent(student.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(s)}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteStudent(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -530,9 +579,7 @@ const Students = () => {
             <Pagination>
               <PaginationContent>
                 <PaginationItem><PaginationPrevious onClick={() => setCurrentPage(p => Math.max(1, p - 1))} className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"} /></PaginationItem>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                  <PaginationItem key={page}><PaginationLink onClick={() => setCurrentPage(page)} isActive={currentPage === page} className="cursor-pointer">{page}</PaginationLink></PaginationItem>
-                ))}
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (<PaginationItem key={page}><PaginationLink onClick={() => setCurrentPage(page)} isActive={currentPage === page} className="cursor-pointer">{page}</PaginationLink></PaginationItem>))}
                 <PaginationItem><PaginationNext onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"} /></PaginationItem>
               </PaginationContent>
             </Pagination>
@@ -543,7 +590,7 @@ const Students = () => {
       {/* Documents dialog */}
       <Dialog open={isDocumentsDialogOpen} onOpenChange={setIsDocumentsDialogOpen}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Documentos de {viewingStudentDocuments?.full_name}</DialogTitle><DialogDescription>Visualize todos os documentos enviados durante a inscrição</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Documentos de {viewingStudentDocuments?.full_name}</DialogTitle><DialogDescription>Visualize os documentos enviados</DialogDescription></DialogHeader>
           {viewingStudentDocuments && (
             <div className="space-y-4">
               {[
@@ -552,24 +599,12 @@ const Students = () => {
                 { key: "cv_url", label: "Curriculum Vitae" },
                 { key: "passport_url", label: "Fotografia tipo passe" },
                 { key: "payment_url", label: "Comprovativo de Pagamento" },
-              ].map((doc) => {
+              ].map(doc => {
                 const url = (viewingStudentDocuments.documents as any)?.[doc.key];
                 return (
                   <div key={doc.key} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="font-medium">{doc.label}</p>
-                        <p className="text-sm text-muted-foreground">{url ? url.split("/").pop() : "Não enviado"}</p>
-                      </div>
-                    </div>
-                    {url ? (
-                      <Button variant="outline" size="sm" onClick={() => window.open(url, "_blank")}>
-                        <Eye className="h-4 w-4 mr-2" /> Ver
-                      </Button>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    )}
+                    <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-primary" /><div><p className="font-medium">{doc.label}</p><p className="text-sm text-muted-foreground">{url ? url.split("/").pop() : "Não enviado"}</p></div></div>
+                    {url ? <Button variant="outline" size="sm" onClick={() => window.open(url, "_blank")}><Eye className="h-4 w-4 mr-2" /> Ver</Button> : <span className="text-sm text-muted-foreground">—</span>}
                   </div>
                 );
               })}
@@ -578,10 +613,10 @@ const Students = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit dialog */}
+      {/* Edit dialog (mantém layout e campos) */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Editar Formando</DialogTitle><DialogDescription>Atualize os dados pessoais e académicos do formando</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Editar Formando</DialogTitle><DialogDescription>Atualize os dados</DialogDescription></DialogHeader>
           {editingStudent && (
             <div className="space-y-6">
               <div className="space-y-2">
@@ -600,10 +635,9 @@ const Students = () => {
                 <div className="space-y-2"><Label>Email</Label><Input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Curso</Label><Input value={editForm.course} onChange={(e) => setEditForm({ ...editForm, course: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Nota Final</Label><Input value={editForm.final_grade} onChange={(e) => setEditForm({ ...editForm, final_grade: e.target.value })} /></div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Documentos (opcional)</Label>
+                <div className="space-y-2 md:col-span-2"><Label>Documentos (opcional)</Label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div><Label className="text-xs">Bilhete de Identidade</Label><input ref={editIdDocRef} type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
+                    <div><Label className="text-xs">Bilhete de Identidade</Label><input ref={editIdRef} type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
                     <div><Label className="text-xs">Declaração / Certificado</Label><input ref={editCertificateRef} type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
                     <div><Label className="text-xs">CV</Label><input ref={editCvRef} type="file" accept=".pdf,.doc,.docx" /></div>
                     <div><Label className="text-xs">Fotografia tipo passe</Label><input ref={editPassportRef} type="file" accept=".jpg,.jpeg,.png" /></div>
@@ -622,3 +656,4 @@ const Students = () => {
 };
 
 export default Students;
+// ...existing code...
