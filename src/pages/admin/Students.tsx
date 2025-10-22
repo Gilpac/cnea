@@ -48,13 +48,7 @@ type Student = {
   final_grade?: number | null;
   status?: string | null;
   photo_url?: string | null;
-  documents?: {
-    id_document_url?: string | null;
-    certificate_url?: string | null;
-    cv_url?: string | null;
-    passport_url?: string | null;
-    payment_url?: string | null;
-  } | null;
+  documents?: Record<string, any> | null;
   has_certificate?: boolean | null;
   created_at?: string | null;
 };
@@ -76,6 +70,7 @@ const Students = () => {
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [viewingStudentDocuments, setViewingStudentDocuments] = useState<Student | null>(null);
   const [certificateStudent, setCertificateStudent] = useState<Student | null>(null);
+  const certificateFileRef = useRef<HTMLInputElement | null>(null);
 
   const [selectedCourse, setSelectedCourse] = useState("");
   const availableCourses = [
@@ -380,7 +375,6 @@ const Students = () => {
   };
 
   const handleDeleteStudent = async (studentId: string) => {
-    // usa diálogo em vez do confirm global se preferires; aqui mantemos mínimo
     if (!confirm("Tem certeza que deseja remover este aluno?")) return;
     setLoading(true);
     const { error } = await supabase.from("students").delete().eq("id", studentId);
@@ -419,8 +413,64 @@ const Students = () => {
     setLoading(false);
   };
 
+  const getDocumentUrl = (s: Student | null, key: string) => {
+    if (!s || !s.documents) return null;
+    // support both naming schemes
+    const docs = s.documents as any;
+    const altMap: Record<string, string> = {
+      id_document_url: "idDocument",
+      certificate_url: "certificate",
+      cv_url: "cv",
+      passport_url: "passportPhoto",
+      payment_url: "paymentProof",
+    };
+    // direct new-style key
+    if (docs[key]) return docs[key];
+    // legacy nested object
+    const legacyKey = altMap[key];
+    if (legacyKey && docs[legacyKey]) {
+      // might be object { name, uploaded, url } or { name, uploaded }
+      if (typeof docs[legacyKey] === "string") return docs[legacyKey];
+      if (docs[legacyKey].url) return docs[legacyKey].url;
+      if (docs[legacyKey].name && docs[legacyKey].uploaded && !docs[legacyKey].url) {
+        // no url available, return null so UI shows filename only
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const getDocumentName = (s: Student | null, key: string) => {
+    if (!s || !s.documents) return null;
+    const docs = s.documents as any;
+    const altMap: Record<string, string> = {
+      id_document_url: "idDocument",
+      certificate_url: "certificate",
+      cv_url: "cv",
+      passport_url: "passportPhoto",
+      payment_url: "paymentProof",
+    };
+    if (docs[key]) {
+      try {
+        const url = docs[key] as string;
+        // if dataURL -> show a placeholder name, else use path last segment
+        if (url.startsWith("data:")) return "Ficheiro enviado";
+        return url.split("/").pop();
+      } catch {
+        return String(docs[key]);
+      }
+    }
+    const legacyKey = altMap[key];
+    if (legacyKey && docs[legacyKey]) {
+      const entry = docs[legacyKey];
+      if (typeof entry === "string") return entry;
+      if (entry.name) return entry.name;
+    }
+    return null;
+  };
+
   const filteredStudents = students.filter((s) =>
-    s.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.full_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.course || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -554,13 +604,13 @@ const Students = () => {
 
                         <Dialog open={isCertificateDialogOpen && certificateStudent?.id === s.id} onOpenChange={(open) => { setIsCertificateDialogOpen(open); if (!open) setCertificateStudent(null); }}>
                           <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm" title="Anexar Certificado" onClick={() => setCertificateStudent(s)}><FileText className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" title="Anexar Certificado" onClick={() => { setCertificateStudent(s); setIsCertificateDialogOpen(true); }}><FileText className="h-4 w-4" /></Button>
                           </DialogTrigger>
                           <DialogContent>
                             <DialogHeader><DialogTitle>Anexar Certificado</DialogTitle><DialogDescription>Anexe o certificado de conclusão para {s.full_name}</DialogDescription></DialogHeader>
                             <div className="space-y-4">
-                              <div><Label>Certificado (PDF)</Label><input id="cert-file" type="file" accept=".pdf" /></div>
-                              <Button onClick={() => handleAttachCertificate(s, document.getElementById("cert-file") as HTMLInputElement | null)} className="w-full">Anexar Certificado</Button>
+                              <div><Label>Certificado (PDF)</Label><input ref={certificateFileRef} type="file" accept=".pdf" /></div>
+                              <Button onClick={() => handleAttachCertificate(certificateStudent, certificateFileRef.current)} className="w-full">Anexar Certificado</Button>
                             </div>
                           </DialogContent>
                         </Dialog>
@@ -600,10 +650,11 @@ const Students = () => {
                 { key: "passport_url", label: "Fotografia tipo passe" },
                 { key: "payment_url", label: "Comprovativo de Pagamento" },
               ].map(doc => {
-                const url = (viewingStudentDocuments.documents as any)?.[doc.key];
+                const url = getDocumentUrl(viewingStudentDocuments, doc.key);
+                const name = getDocumentName(viewingStudentDocuments, doc.key) || "Não enviado";
                 return (
                   <div key={doc.key} className="flex items-center justify-between p-3 border rounded-lg">
-                    <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-primary" /><div><p className="font-medium">{doc.label}</p><p className="text-sm text-muted-foreground">{url ? url.split("/").pop() : "Não enviado"}</p></div></div>
+                    <div className="flex items-center gap-3"><FileText className="h-5 w-5 text-primary" /><div><p className="font-medium">{doc.label}</p><p className="text-sm text-muted-foreground">{name}</p></div></div>
                     {url ? <Button variant="outline" size="sm" onClick={() => window.open(url, "_blank")}><Eye className="h-4 w-4 mr-2" /> Ver</Button> : <span className="text-sm text-muted-foreground">—</span>}
                   </div>
                 );
@@ -613,7 +664,7 @@ const Students = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit dialog (mantém layout e campos) */}
+      {/* Edit dialog (fields populated and documentos mostrados) */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Editar Formando</DialogTitle><DialogDescription>Atualize os dados</DialogDescription></DialogHeader>
@@ -633,16 +684,49 @@ const Students = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Nome</Label><Input value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Email</Label><Input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Data de Nascimento</Label><Input type="date" value={editForm.birth_date} onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Sexo/Gênero</Label><Select onValueChange={(v) => setEditForm({ ...editForm, gender: v })}><SelectTrigger><SelectValue placeholder={editForm.gender || "Selecione"} /></SelectTrigger><SelectContent><SelectItem value="masculino">Masculino</SelectItem><SelectItem value="feminino">Feminino</SelectItem><SelectItem value="outro">Outro</SelectItem></SelectContent></Select></div>
+                <div className="space-y-2"><Label>Nº do Bilhete</Label><Input value={editForm.id_number} onChange={(e) => setEditForm({ ...editForm, id_number: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Nacionalidade</Label><Input value={editForm.nationality} onChange={(e) => setEditForm({ ...editForm, nationality: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Contacto</Label><Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Instituição</Label><Input value={editForm.institution} onChange={(e) => setEditForm({ ...editForm, institution: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Curso</Label><Input value={editForm.course} onChange={(e) => setEditForm({ ...editForm, course: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Nota Final</Label><Input value={editForm.final_grade} onChange={(e) => setEditForm({ ...editForm, final_grade: e.target.value })} /></div>
-                <div className="space-y-2 md:col-span-2"><Label>Documentos (opcional)</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div><Label className="text-xs">Bilhete de Identidade</Label><input ref={editIdRef} type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
-                    <div><Label className="text-xs">Declaração / Certificado</Label><input ref={editCertificateRef} type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
-                    <div><Label className="text-xs">CV</Label><input ref={editCvRef} type="file" accept=".pdf,.doc,.docx" /></div>
-                    <div><Label className="text-xs">Fotografia tipo passe</Label><input ref={editPassportRef} type="file" accept=".jpg,.jpeg,.png" /></div>
-                    <div><Label className="text-xs">Comprovativo Pagamento</Label><input ref={editPaymentRef} type="file" accept=".pdf,.jpg,.jpeg,.png" /></div>
-                  </div>
+                <div className="space-y-2"><Label>Ano</Label><Input type="number" value={editForm.year} onChange={(e) => setEditForm({ ...editForm, year: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Turno</Label><Select onValueChange={(v) => setEditForm({ ...editForm, shift: v })}><SelectTrigger><SelectValue placeholder={editForm.shift || "Selecione"} /></SelectTrigger><SelectContent><SelectItem value="manha">Manhã</SelectItem><SelectItem value="tarde">Tarde</SelectItem><SelectItem value="noite">Noite</SelectItem></SelectContent></Select></div>
+                <div className="space-y-2"><Label>Nota Final</Label><Input type="number" value={editForm.final_grade} onChange={(e) => setEditForm({ ...editForm, final_grade: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Status</Label><Select onValueChange={(v) => setEditForm({ ...editForm, status: v })}><SelectTrigger><SelectValue placeholder={editForm.status || "Selecione"} /></SelectTrigger><SelectContent><SelectItem value="Ativo">Ativo</SelectItem><SelectItem value="Concluído">Concluído</SelectItem><SelectItem value="Inativo">Inativo</SelectItem></SelectContent></Select></div>
+              </div>
+
+              <div>
+                <Label className="text-sm">Documentos existentes</Label>
+                <div className="grid gap-2 mt-2">
+                  {[
+                    { key: "id_document_url", label: "Bilhete de Identidade" },
+                    { key: "certificate_url", label: "Declaração / Certificado" },
+                    { key: "cv_url", label: "Curriculum Vitae" },
+                    { key: "passport_url", label: "Fotografia tipo passe" },
+                    { key: "payment_url", label: "Comprovativo de Pagamento" },
+                  ].map(d => {
+                    const url = getDocumentUrl(editingStudent, d.key);
+                    const name = getDocumentName(editingStudent, d.key) || "Não enviado";
+                    return (
+                      <div key={d.key} className="flex items-center justify-between p-2 border rounded">
+                        <div>
+                          <div className="font-medium">{d.label}</div>
+                          <div className="text-sm text-muted-foreground">{name}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {url && <Button variant="outline" size="sm" onClick={() => window.open(url, "_blank")}><Eye className="h-4 w-4 mr-2" />Ver</Button>}
+                          {/* file input to replace document */}
+                          <input ref={d.key === "id_document_url" ? editIdRef : d.key === "certificate_url" ? editCertificateRef : d.key === "cv_url" ? editCvRef : d.key === "passport_url" ? editPassportRef : editPaymentRef} type="file" className="hidden" id={`edit-file-${d.key}`} />
+                          <Button variant="ghost" size="sm" onClick={() => {
+                            const el = document.getElementById(`edit-file-${d.key}`) as HTMLInputElement | null;
+                            el?.click();
+                          }}><Upload className="h-4 w-4" /></Button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
