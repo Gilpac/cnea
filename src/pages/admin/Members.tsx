@@ -104,11 +104,24 @@ const Members = () => {
     setMembers((data as Member[]) || []);
   };
 
+  
+  // ...existing code...
   const uploadAvatar = async (memberId: string, file: File | null) => {
     if (!file) return null;
+
+    // helper para converter para data URL (fallback)
+    const fileToDataUrl = (f: File) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(f);
+      });
+
     try {
       const path = `${memberId}/${Date.now()}-${file.name}`;
-      // upload retorna { data, error }
+
+      // tenta subir para bucket 'avatars'
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(path, file, {
@@ -116,21 +129,37 @@ const Members = () => {
           upsert: true,
         });
 
-      if (uploadError) {
-        console.warn("Storage upload error:", uploadError.message);
-        return null;
+      if (!uploadError && uploadData) {
+        // obtém public url
+        const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+        const publicUrl = (urlData as any)?.publicUrl || null;
+        if (publicUrl) return publicUrl;
+      } else {
+        // se upload falhar, loga e prossegue para fallback
+        console.warn("Storage upload error:", uploadError?.message || uploadError);
       }
 
-      // getPublicUrl retorna { data: { publicUrl }, error? }
-      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
-      const publicUrl = (urlData && (urlData as any).publicUrl) || null;
-
-      return publicUrl;
+      // fallback: converte para data URL e guarda no photo_url (não requer storage)
+      const dataUrl = await fileToDataUrl(file);
+      return dataUrl;
     } catch (err) {
       console.warn("uploadAvatar error:", err);
-      return null;
+      toast({
+        title: "Aviso: upload falhou",
+        description: "Não foi possível subir a imagem para o bucket 'avatars'. A imagem será guardada em base64. (Se preferir usar Storage, crie um bucket 'avatars' no Supabase Storage.)",
+        variant: "destructive",
+      });
+      try {
+        // fallback final: data url
+        return await fileToDataUrl(file);
+      } catch {
+        return null;
+      }
     }
   };
+// ...existing code...
+
+
 
   const handleAddMember = async () => {
     if (!addForm.full_name) {
