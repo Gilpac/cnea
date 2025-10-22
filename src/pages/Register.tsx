@@ -10,6 +10,7 @@ import { ArrowLeft } from "lucide-react";
 import logoCnea from "@/assets/logo-cnea.png";
 import { supabase } from "@/lib/supabase";
 
+
 const Register = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
