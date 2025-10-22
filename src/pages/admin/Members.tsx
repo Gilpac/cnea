@@ -1,3 +1,4 @@
+// ...existing code...
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +48,10 @@ const Members = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
+  // delete confirmation dialog
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
+
   const [addForm, setAddForm] = useState({
     full_name: "",
     role: "",
@@ -69,12 +74,18 @@ const Members = () => {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [addPreviewUrl, setAddPreviewUrl] = useState<string | null>(null);
+  const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMembers();
+    // clean up previews on unmount
+    return () => {
+      if (addPreviewUrl) URL.revokeObjectURL(addPreviewUrl);
+      if (editPreviewUrl) URL.revokeObjectURL(editPreviewUrl);
+    };
   }, []);
 
-  // ...existing code...
   const fetchMembers = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -92,23 +103,29 @@ const Members = () => {
     }
     setMembers((data as Member[]) || []);
   };
-// ...existing code...
 
   const uploadAvatar = async (memberId: string, file: File | null) => {
     if (!file) return null;
     try {
-      // tenta subir para bucket 'avatars' com caminho `${memberId}/${filename}`
-      const path = `${memberId}/${file.name}`;
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, {
-        cacheControl: "3600",
-        upsert: true,
-      });
+      const path = `${memberId}/${Date.now()}-${file.name}`;
+      // upload retorna { data, error }
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, {
+          cacheControl: "3600",
+          upsert: true,
+        });
+
       if (uploadError) {
         console.warn("Storage upload error:", uploadError.message);
         return null;
       }
-      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-      return data?.publicUrl || null;
+
+      // getPublicUrl retorna { data: { publicUrl }, error? }
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+      const publicUrl = (urlData && (urlData as any).publicUrl) || null;
+
+      return publicUrl;
     } catch (err) {
       console.warn("uploadAvatar error:", err);
       return null;
@@ -122,12 +139,16 @@ const Members = () => {
     }
     setLoading(true);
     // inserir sem photo_url primeiro
-    const { data, error } = await supabase.from("members").insert({
-      full_name: addForm.full_name,
-      role: addForm.role || null,
-      email: addForm.email || null,
-      phone: addForm.phone || null,
-    }).select().single();
+    const { data, error } = await supabase
+      .from("members")
+      .insert({
+        full_name: addForm.full_name,
+        role: addForm.role || null,
+        email: addForm.email || null,
+        phone: addForm.phone || null,
+      })
+      .select()
+      .single();
 
     if (error || !data) {
       setLoading(false);
@@ -137,15 +158,19 @@ const Members = () => {
 
     // se tiver ficheiro, faz upload e actualiza o membro com photo_url
     if (fileToUpload) {
-      const publicUrl = await uploadAvatar(data.id, fileToUpload);
+      const publicUrl = await uploadAvatar((data as Member).id, fileToUpload);
       if (publicUrl) {
-        await supabase.from("members").update({ photo_url: publicUrl }).eq("id", data.id);
+        await supabase.from("members").update({ photo_url: publicUrl }).eq("id", (data as Member).id);
       }
     }
 
     setLoading(false);
     setIsAddDialogOpen(false);
     setAddForm({ full_name: "", role: "", email: "", phone: "" });
+    if (addPreviewUrl) {
+      URL.revokeObjectURL(addPreviewUrl);
+      setAddPreviewUrl(null);
+    }
     setFileToUpload(null);
     toast({ title: "Membro adicionado!", description: "O novo membro foi adicionado com sucesso." });
     fetchMembers();
@@ -159,18 +184,22 @@ const Members = () => {
       email: member.email || "",
       phone: member.phone || "",
     });
+    setEditPreviewUrl(member.photo_url || null);
     setIsEditDialogOpen(true);
   };
 
   const handleEditMember = async () => {
     if (!editingMember) return;
     setLoading(true);
-    const { error } = await supabase.from("members").update({
-      full_name: editForm.full_name,
-      role: editForm.role || null,
-      email: editForm.email || null,
-      phone: editForm.phone || null,
-    }).eq("id", editingMember.id);
+    const { error } = await supabase
+      .from("members")
+      .update({
+        full_name: editForm.full_name,
+        role: editForm.role || null,
+        email: editForm.email || null,
+        phone: editForm.phone || null,
+      })
+      .eq("id", editingMember.id);
 
     if (error) {
       setLoading(false);
@@ -188,22 +217,32 @@ const Members = () => {
     setLoading(false);
     setIsEditDialogOpen(false);
     setEditingMember(null);
+    if (editPreviewUrl && editPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(editPreviewUrl);
+    }
     setEditFileToUpload(null);
+    setEditPreviewUrl(null);
     toast({ title: "Membro atualizado!", description: "As informações do membro foram atualizadas." });
     fetchMembers();
   };
 
-  const handleDeleteMember = async (memberId: string) => {
-    const confirm = window.confirm("Tem certeza que deseja remover este membro?");
-    if (!confirm) return;
+  const openDeleteDialog = (member: Member) => {
+    setMemberToDelete(member);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteMember = async () => {
+    if (!memberToDelete) return;
     setLoading(true);
-    const { error } = await supabase.from("members").delete().eq("id", memberId);
+    const { error } = await supabase.from("members").delete().eq("id", memberToDelete.id);
     setLoading(false);
+    setIsDeleteDialogOpen(false);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
       return;
     }
     toast({ title: "Membro removido", description: "O membro foi removido com sucesso." });
+    setMemberToDelete(null);
     fetchMembers();
   };
 
@@ -218,7 +257,7 @@ const Members = () => {
           <p className="text-muted-foreground">Gerencie todos os membros da organização</p>
         </div>
 
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <Dialog open={isAddDialogOpen} onOpenChange={(v) => { setIsAddDialogOpen(v); if (!v) { if (addPreviewUrl) { URL.revokeObjectURL(addPreviewUrl); setAddPreviewUrl(null); } setFileToUpload(null); } }}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -235,7 +274,7 @@ const Members = () => {
                 <Label htmlFor="photo">Foto de Perfil (opcional)</Label>
                 <div className="flex items-center gap-4">
                   <Avatar className="h-20 w-20">
-                    <AvatarImage src={fileToUpload ? URL.createObjectURL(fileToUpload) : profilePhoto} />
+                    <AvatarImage src={addPreviewUrl || profilePhoto} />
                     <AvatarFallback>Foto</AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col gap-2">
@@ -243,7 +282,16 @@ const Members = () => {
                       ref={fileInputRef}
                       type="file"
                       accept="image/*"
-                      onChange={(e) => setFileToUpload(e.target.files?.[0] || null)}
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        setFileToUpload(f);
+                        if (f) {
+                          const url = URL.createObjectURL(f);
+                          if (addPreviewUrl) URL.revokeObjectURL(addPreviewUrl);
+                          setAddPreviewUrl(url);
+                        }
+                      }}
                     />
                     <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                       <Upload className="mr-2 h-4 w-4" />
@@ -312,7 +360,7 @@ const Members = () => {
                       <Button variant="ghost" size="sm" onClick={() => openEditDialog(member)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteMember(member.id)}>
+                      <Button variant="ghost" size="sm" onClick={() => openDeleteDialog(member)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -352,7 +400,7 @@ const Members = () => {
         </CardContent>
       </Card>
 
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={isEditDialogOpen} onOpenChange={(v) => { setIsEditDialogOpen(v); if (!v) { setEditingMember(null); if (editPreviewUrl && editPreviewUrl.startsWith("blob:")) { URL.revokeObjectURL(editPreviewUrl); setEditPreviewUrl(null); } setEditFileToUpload(null); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Editar Membro</DialogTitle>
@@ -365,7 +413,7 @@ const Members = () => {
                 <Label htmlFor="edit-photo">Foto de Perfil (opcional)</Label>
                 <div className="flex items-center gap-4">
                   <Avatar className="h-20 w-20">
-                    <AvatarImage src={editingMember.photo_url || profilePhoto} />
+                    <AvatarImage src={editPreviewUrl || profilePhoto} />
                     <AvatarFallback>{editingMember.full_name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col gap-2">
@@ -373,7 +421,16 @@ const Members = () => {
                       ref={editFileInputRef}
                       type="file"
                       accept="image/*"
-                      onChange={(e) => setEditFileToUpload(e.target.files?.[0] || null)}
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        setEditFileToUpload(f);
+                        if (f) {
+                          const url = URL.createObjectURL(f);
+                          if (editPreviewUrl && editPreviewUrl.startsWith("blob:")) URL.revokeObjectURL(editPreviewUrl);
+                          setEditPreviewUrl(url);
+                        }
+                      }}
                     />
                     <Button variant="outline" size="sm" onClick={() => editFileInputRef.current?.click()}>
                       <Upload className="mr-2 h-4 w-4" />
@@ -407,8 +464,30 @@ const Members = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar remoção</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja remover{" "}
+              <strong>{memberToDelete?.full_name || "este membro"}</strong>? Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 mt-4">
+            <Button variant="ghost" onClick={() => { setIsDeleteDialogOpen(false); setMemberToDelete(null); }}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteMember} disabled={loading}>
+              {loading ? "A processar..." : "Remover"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 export default Members;
+// ...existing code...
