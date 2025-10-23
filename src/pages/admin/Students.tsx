@@ -67,6 +67,11 @@ const Students = () => {
   const [isDocumentsDialogOpen, setIsDocumentsDialogOpen] = useState(false);
   const [isCertificateDialogOpen, setIsCertificateDialogOpen] = useState(false);
 
+  // --- ADDED: delete confirmation state ---
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [studentToDeleteId, setStudentToDeleteId] = useState<string | null>(null);
+  // --- end added ---
+
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [viewingStudentDocuments, setViewingStudentDocuments] = useState<Student | null>(null);
   const [certificateStudent, setCertificateStudent] = useState<Student | null>(null);
@@ -79,6 +84,10 @@ const Students = () => {
     { id: 3, name: "Saúde e Enfermagem", price: 180000 },
     { id: 4, name: "Engenharia Civil", price: 200000 },
   ];
+
+  // --- ADDED: courses options loaded from DB for add-form dropdown ---
+  const [coursesOptions, setCoursesOptions] = useState<{ id: string; name: string; price?: number | null }[]>([]);
+  // --- end added ---
 
   const [loading, setLoading] = useState(false);
 
@@ -138,6 +147,7 @@ const Students = () => {
 
   useEffect(() => {
     fetchStudents();
+    fetchCoursesOptions(); // load courses for dropdown
   }, []);
 
   const fetchStudents = async () => {
@@ -150,6 +160,17 @@ const Students = () => {
     }
     setStudents((data as Student[]) || []);
   };
+
+  // --- ADDED: fetch courses for course dropdown ---
+  const fetchCoursesOptions = async () => {
+    const { data, error } = await supabase.from("courses").select("id,name,price").order("name", { ascending: true });
+    if (error) {
+      console.warn("fetchCoursesOptions:", error.message);
+      return;
+    }
+    setCoursesOptions((data as any) || []);
+  };
+  // --- end added ---
 
   // helper: file -> dataURL fallback
   const fileToDataUrl = (f: File) =>
@@ -374,11 +395,20 @@ const Students = () => {
     fetchStudents();
   };
 
-  const handleDeleteStudent = async (studentId: string) => {
-    if (!confirm("Tem certeza que deseja remover este aluno?")) return;
+  // REPLACED: open delete dialog instead of using browser confirm
+  const handleDeleteStudent = (studentId: string) => {
+    setStudentToDeleteId(studentId);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // --- ADDED: perform actual deletion after user confirms in dialog ---
+  const performDeleteStudent = async () => {
+    if (!studentToDeleteId) return;
     setLoading(true);
-    const { error } = await supabase.from("students").delete().eq("id", studentId);
+    const { error } = await supabase.from("students").delete().eq("id", studentToDeleteId);
     setLoading(false);
+    setIsDeleteDialogOpen(false);
+    setStudentToDeleteId(null);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
       return;
@@ -386,6 +416,7 @@ const Students = () => {
     toast({ title: "Aluno removido", description: "Aluno removido com sucesso." });
     fetchStudents();
   };
+  // --- end added ---
 
   const handleViewDocuments = (student: Student) => {
     setViewingStudentDocuments(student);
@@ -540,7 +571,22 @@ const Students = () => {
                 <h3 className="text-lg font-semibold border-b pb-2">2. Dados Académicos</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Instituição</Label><Input value={addForm.institution} onChange={(e) => setAddForm({ ...addForm, institution: e.target.value })} /></div>
-                  <div className="space-y-2"><Label>Curso</Label><Select onValueChange={(v) => setAddForm({ ...addForm, course: v })}><SelectTrigger><SelectValue placeholder="Selecione o curso" /></SelectTrigger><SelectContent>{availableCourses.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label>Curso</Label>
+                    <Select onValueChange={(v) => setAddForm({ ...addForm, course: v })}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o curso" /></SelectTrigger>
+                      <SelectContent>
+                        {coursesOptions.length === 0 ? (
+                          availableCourses.map(c => <SelectItem key={c.id} value={c.name}>{c.name}{c.price ? ` — ${Number(c.price).toLocaleString('pt-AO')} Kz` : ""}</SelectItem>)
+                        ) : (
+                          coursesOptions.map(c => (
+                            <SelectItem key={c.id} value={c.name}>
+                              {c.name}{c.price ? ` — ${Number(c.price).toLocaleString('pt-AO')} Kz` : ""}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-2"><Label>Ano</Label><Input type="number" value={addForm.year} onChange={(e) => setAddForm({ ...addForm, year: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Turno</Label><Select onValueChange={(v) => setAddForm({ ...addForm, shift: v })}><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent><SelectItem value="manha">Manhã</SelectItem><SelectItem value="tarde">Tarde</SelectItem><SelectItem value="noite">Noite</SelectItem></SelectContent></Select></div>
                   <div className="space-y-2"><Label>Nota Final</Label><Input type="number" value={addForm.final_grade} onChange={(e) => setAddForm({ ...addForm, final_grade: e.target.value })} /></div>
@@ -735,6 +781,25 @@ const Students = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* --- ADDED: Delete confirmation dialog --- */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={(v) => { setIsDeleteDialogOpen(v); if (!v) setStudentToDeleteId(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar eliminação</DialogTitle>
+            <DialogDescription>Tem certeza que deseja remover este aluno? Esta ação é irreversível.</DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 mt-4">
+            <Button variant="destructive" className="w-full" onClick={performDeleteStudent} disabled={loading}>
+              {loading ? "A processar..." : "Eliminar"}
+            </Button>
+            <Button className="w-full" onClick={() => { setIsDeleteDialogOpen(false); setStudentToDeleteId(null); }}>
+              Cancelar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* --- end added --- */}
     </div>
   );
 };
