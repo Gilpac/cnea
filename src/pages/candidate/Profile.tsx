@@ -1,3 +1,4 @@
+// ...existing code...
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +9,6 @@ import { Camera, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import profilePhoto from "@/assets/profile-photo.png";
 import { supabase } from "@/lib/supabase";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const Profile = () => {
   const { toast } = useToast();
@@ -36,26 +36,7 @@ const Profile = () => {
     status: "Ativo",
   });
 
-  // courses dropdown (name + price) loaded from DB
-  const [coursesOptions, setCoursesOptions] = useState<{ id: string; name: string; price?: number | null }[]>([]);
-
-  const fetchCourses = async () => {
-    try {
-      const { data, error } = await supabase.from("courses").select("id,name,price").order("name", { ascending: true });
-      if (error) {
-        console.warn("fetchCourses:", error.message);
-        return;
-      }
-      setCoursesOptions((data as any) || []);
-    } catch (err) {
-      console.warn("fetchCourses error:", err);
-    }
-  };
-
   useEffect(() => {
-    // load courses regardless of auth state
-    fetchCourses();
-
     (async () => {
       try {
         const { data: userData, error: userErr } = await supabase.auth.getUser();
@@ -63,22 +44,21 @@ const Profile = () => {
           console.warn("auth.getUser:", userErr.message);
         }
         const user = (userData as any)?.user;
-        if (!user) return;
+        if (!user) {
+          // no user: keep defaults
+          return;
+        }
 
-        // Try to find student record: prefer auth_id if present, otherwise by email
+        // Try to find student record: prefer auth id if column exists, otherwise by email
         let studentRecord: any = null;
 
-        try {
-          const { data: byAuthId, error: errAuth } = await supabase
-            .from("students")
-            .select("*")
-            .eq("auth_id", user.id)
-            .maybeSingle();
-          if (!errAuth && byAuthId) studentRecord = byAuthId;
-        } catch (err) {
-          // ignore (column may not exist)
-          console.warn("auth_id query skipped or failed:", err);
-        }
+        // try auth id match (if your students table has auth_id)
+        const { data: byAuthId, error: errAuth } = await supabase
+          .from("students")
+          .select("*")
+          .eq("auth_id", user.id)
+          .maybeSingle();
+        if (!errAuth && byAuthId) studentRecord = byAuthId;
 
         if (!studentRecord && user.email) {
           const { data: byEmail, error: errEmail } = await supabase
@@ -97,7 +77,7 @@ const Profile = () => {
             phone: studentRecord.phone || "",
             bi: studentRecord.id_number || "",
             address: studentRecord.address || "",
-            birthDate: studentRecord.birth_date ? student_record_to_date(studentRecord.birth_date) : "",
+            birthDate: studentRecord.birth_date ? studentRecord.birth_date.split("T")[0] : "",
             photo: studentRecord.photo_url || profilePhoto,
             nationality: studentRecord.nationality || "",
             municipality: studentRecord.municipality || "",
@@ -123,15 +103,6 @@ const Profile = () => {
     })();
   }, []);
 
-  // small helper to normalize date string from DB
-  const student_record_to_date = (d: any) => {
-    try {
-      return String(d).split("T")[0];
-    } catch {
-      return "";
-    }
-  };
-
   const uploadAvatar = async (targetId: string) => {
     if (!photoFile) return null;
     try {
@@ -155,10 +126,10 @@ const Profile = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
-      const { data: ud } = await supabase.auth.getUser();
+      // get auth user
+      const { data: ud, error: ue } = await supabase.auth.getUser();
       const user = (ud as any)?.user;
-
-      // Prepare payload (keep enrollment-only fields optional; institution/year/shift/final_grade are not shown in UI)
+      // Prepare payload
       const payload: any = {
         full_name: profileData.name || null,
         email: profileData.email || null,
@@ -169,28 +140,35 @@ const Profile = () => {
         nationality: profileData.nationality || null,
         municipality: profileData.municipality || null,
         province: profileData.province || null,
-        // course remains — stored as course name (from dropdown)
+        institution: profileData.institution || null,
         course: profileData.course || null,
+        year: profileData.year ? Number(profileData.year) : null,
+        shift: profileData.shift || null,
+        final_grade: profileData.final_grade ? Number(profileData.final_grade) : null,
         status: profileData.status || "Ativo",
       };
 
       let targetId = studentId;
 
       if (!targetId) {
-        // insert new student — do NOT include auth_id by default to avoid schema cache errors
+        // insert new student
         const { data: insertData, error: insertErr } = await supabase
           .from("students")
           .insert({
             ...payload,
             has_certificate: false,
+            auth_id: user?.id || null, // optional column if present
           })
           .select()
           .limit(1)
           .single();
-        if (insertErr) throw insertErr;
+        if (insertErr) {
+          throw insertErr;
+        }
         targetId = (insertData as any).id;
         setStudentId(targetId);
       } else {
+        // update existing
         const { error: updateErr } = await supabase.from("students").update(payload).eq("id", targetId);
         if (updateErr) throw updateErr;
       }
@@ -230,7 +208,7 @@ const Profile = () => {
             <Avatar className="h-32 w-32">
               <AvatarImage src={profileData.photo || profilePhoto} alt={profileData.name} />
               <AvatarFallback className="text-3xl">
-                {(profileData.name || "").split(" ").map(n => n[0]).join("")}
+                {(profileData.name || "").split(' ').map(n => n[0]).join('')}
               </AvatarFallback>
             </Avatar>
 
@@ -243,6 +221,7 @@ const Profile = () => {
                 const f = e.target.files?.[0] || null;
                 if (f) {
                   setPhotoFile(f);
+                  // preview immediately
                   setProfileData((p) => ({ ...p, photo: URL.createObjectURL(f) }));
                 }
               }}
@@ -320,7 +299,7 @@ const Profile = () => {
               </div>
             </div>
 
-            {/* visible fields for personal info */}
+            {/* additional fields for enrollment */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="nationality">Nacionalidade</Label>
@@ -334,31 +313,27 @@ const Profile = () => {
                 <Label htmlFor="province">Província</Label>
                 <Input id="province" value={profileData.province} onChange={(e) => setProfileData({ ...profileData, province: e.target.value })} />
               </div>
-
-              {/* course dropdown populated from courses table */}
+              <div className="space-y-2">
+                <Label htmlFor="institution">Instituição</Label>
+                <Input id="institution" value={profileData.institution} onChange={(e) => setProfileData({ ...profileData, institution: e.target.value })} />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="course">Curso</Label>
-                <Select value={profileData.course || ""} onValueChange={(v) => setProfileData({ ...profileData, course: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o curso" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {coursesOptions.length === 0 ? (
-                      <SelectItem value="">Sem cursos</SelectItem>
-                    ) : (
-                      coursesOptions.map((c) => (
-                        <SelectItem key={c.id} value={c.name}>
-                          {c.name}
-                          {c.price ? ` — ${Number(c.price).toLocaleString("pt-AO")} Kz` : ""}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                <Input id="course" value={profileData.course} onChange={(e) => setProfileData({ ...profileData, course: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="year">Ano</Label>
+                <Input id="year" type="number" value={profileData.year} onChange={(e) => setProfileData({ ...profileData, year: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="shift">Turno</Label>
+                <Input id="shift" value={profileData.shift} onChange={(e) => setProfileData({ ...profileData, shift: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="final_grade">Nota Final</Label>
+                <Input id="final_grade" type="number" value={profileData.final_grade} onChange={(e) => setProfileData({ ...profileData, final_grade: e.target.value })} />
               </div>
             </div>
-
-            {/* institution, year, shift, final_grade are enrollment-specific — not shown on profile page */}
 
             <div className="pt-4">
               <Button onClick={handleSave} className="w-full sm:w-auto" disabled={loading}>
@@ -374,3 +349,4 @@ const Profile = () => {
 };
 
 export default Profile;
+// ...existing code...
