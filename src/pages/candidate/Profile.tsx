@@ -128,6 +128,20 @@ const Profile = () => {
       return null;
     }
   };
+// ...existing code...
+  // helper: check if students.auth_id column exists
+  const authIdColumnExists = async (): Promise<boolean> => {
+    try {
+      const { error } = await supabase.from("students").select("auth_id").limit(1);
+      if (error) {
+        // column likely doesn't exist or permission error
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   const handleSave = async () => {
     setLoading(true);
@@ -157,18 +171,25 @@ const Profile = () => {
       let targetId = studentId;
 
       if (!targetId) {
-        // insert new student
-        // DO NOT include auth_id by default to avoid schema cache errors when column is absent
+        // check if auth_id column exists and include it if present (prevents schema-cache error and satisfies owner RLS)
+        const hasAuthId = await authIdColumnExists();
+
+        const insertPayload = {
+          ...payload,
+          has_certificate: false,
+          ...(hasAuthId ? { auth_id: user?.id || null } : {}),
+        };
+
         const { data: insertData, error: insertErr } = await supabase
           .from("students")
-          .insert({
-            ...payload,
-            has_certificate: false,
-          })
+          .insert(insertPayload)
           .select()
           .limit(1)
           .single();
+
         if (insertErr) {
+          // common cause: RLS blocking insert — inform user via toast and log
+          console.warn("insert student error:", insertErr);
           throw insertErr;
         }
         targetId = (insertData as any).id;
@@ -190,13 +211,16 @@ const Profile = () => {
 
       toast({ title: "Perfil atualizado!", description: "Suas informações foram salvas com sucesso." });
     } catch (err: any) {
-      // Show generic message; DB error about missing auth_id will no longer occur
-      toast({ title: "Erro", description: err?.message || "Não foi possível salvar os dados", variant: "destructive" });
+      // Show message; include hint for RLS problems
+      const msg = err?.message || String(err);
+      const hint = msg.includes("row-level security") ? " — RLS está a bloquear esta operação. Verifique policies/auth_id." : "";
+      toast({ title: "Erro", description: msg + hint, variant: "destructive" });
       console.warn("save profile error:", err);
     } finally {
       setLoading(false);
     }
   };
+// ...existing code...
 
   return (
     <div className="space-y-6">
