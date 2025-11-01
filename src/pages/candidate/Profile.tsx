@@ -1,3 +1,6 @@
+// ...existing code...
+"use client";
+
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -230,7 +233,7 @@ const Profile = () => {
             <Avatar className="h-32 w-32">
               <AvatarImage src={profileData.photo || profilePhoto} alt={profileData.name} />
               <AvatarFallback className="text-3xl">
-                {(profileData.name || "").split(" ").map(n => n[0]).join("")}
+                {(profileData.name || "").split(" ").filter(Boolean).map(n => n[0]).join("")}
               </AvatarFallback>
             </Avatar>
 
@@ -374,3 +377,4 @@ const Profile = () => {
 };
 
 export default Profile;
+// ...existing code...
