@@ -37,13 +37,16 @@ const Profile = () => {
     status: "Ativo",
   });
 
-  // --- NEW: courses + selected courses (multiple) ---
+  // --- NEW: courses + enrollments UI state ---
   const [coursesOptions, setCoursesOptions] = useState<{ id: string; name: string; price?: number | null }[]>([]);
-  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+  const [enrollments, setEnrollments] = useState<{ id: string; course_id: string; created_at?: string }[]>([]);
+  const [newCourseId, setNewCourseId] = useState<string>("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCourseId, setEditingCourseId] = useState<string>("");
 
   const fetchCourses = async () => {
     try {
-      const { data, error } = await supabase.from("courses").select("id, name, price").order("name", { ascending: true });
+      const { data, error } = await supabase.from("courses").select("id,name,price").order("name", { ascending: true });
       if (error) {
         console.warn("fetchCourses:", error);
         return;
@@ -51,6 +54,20 @@ const Profile = () => {
       setCoursesOptions((data as any) || []);
     } catch (err) {
       console.warn("fetchCourses error:", err);
+    }
+  };
+
+  const fetchEnrollments = async (sid: string | null) => {
+    if (!sid) return;
+    try {
+      const { data, error } = await supabase.from("enrollments").select("id,course_id,created_at").eq("student_id", sid).order("created_at", { ascending: false });
+      if (error) {
+        console.warn("fetchEnrollments:", error);
+        return;
+      }
+      setEnrollments((data as any) || []);
+    } catch (err) {
+      console.warn("fetchEnrollments error:", err);
     }
   };
   // --- end new ---
@@ -68,14 +85,13 @@ const Profile = () => {
           return;
         }
 
-        // fetch available courses (for multi-select)
+        // fetch available courses (for enrollments UI)
         fetchCourses();
 
         // Try to find student record: prefer auth id if column exists, otherwise by email
         let studentRecord: any = null;
 
         // try auth id match (if your students table has auth_id)
-        // Wrap in try/catch because the column might not exist in the DB schema
         try {
           const { data: byAuthId, error: errAuth } = await supabase
             .from("students")
@@ -84,7 +100,6 @@ const Profile = () => {
             .maybeSingle();
           if (!errAuth && byAuthId) studentRecord = byAuthId;
         } catch (err) {
-          // auth_id column likely doesn't exist -> skip and fallback to email lookup
           console.warn("auth_id lookup skipped (column may not exist):", err);
         }
 
@@ -118,19 +133,8 @@ const Profile = () => {
             status: studentRecord.status || "Ativo",
           });
 
-          // NEW: load existing enrollments (course ids) for this student
-          try {
-            const { data: enrolls, error: enrollErr } = await supabase
-              .from("enrollments")
-              .select("course_id")
-              .eq("student_id", studentRecord.id);
-            if (!enrollErr && enrolls) {
-              setSelectedCourses((enrolls as any).map((r: any) => r.course_id));
-            }
-          } catch (e) {
-            console.warn("load enrollments error:", e);
-          }
-          // end NEW
+          // load enrollments for this student
+          fetchEnrollments(studentRecord.id);
         } else {
           // no student record: prefill from auth user
           setProfileData((p) => ({
@@ -144,6 +148,10 @@ const Profile = () => {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (studentId) fetchEnrollments(studentId);
+  }, [studentId]);
 
   const uploadAvatar = async (targetId: string) => {
     if (!photoFile) return null;
@@ -166,12 +174,10 @@ const Profile = () => {
   };
 
   // ...existing code...
-  // helper: check if students.auth_id column exists
   const authIdColumnExists = async (): Promise<boolean> => {
     try {
       const { error } = await supabase.from("students").select("auth_id").limit(1);
       if (error) {
-        // column likely doesn't exist or permission error
         return false;
       }
       return true;
@@ -183,10 +189,8 @@ const Profile = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
-      // get auth user
-      const { data: ud, error: ue } = await supabase.auth.getUser();
+      const { data: ud } = await supabase.auth.getUser();
       const user = (ud as any)?.user;
-      // Prepare payload
       const payload: any = {
         full_name: profileData.name || null,
         email: profileData.email || null,
@@ -208,9 +212,7 @@ const Profile = () => {
       let targetId = studentId;
 
       if (!targetId) {
-        // check if auth_id column exists and include it if present (prevents schema-cache error and satisfies owner RLS)
         const hasAuthId = await authIdColumnExists();
-
         const insertPayload = {
           ...payload,
           has_certificate: false,
@@ -225,19 +227,16 @@ const Profile = () => {
           .single();
 
         if (insertErr) {
-          // common cause: RLS blocking insert — inform user via toast and log
           console.warn("insert student error:", insertErr);
           throw insertErr;
         }
         targetId = (insertData as any).id;
         setStudentId(targetId);
       } else {
-        // update existing
         const { error: updateErr } = await supabase.from("students").update(payload).eq("id", targetId);
         if (updateErr) throw updateErr;
       }
 
-      // upload avatar if selected
       if (photoFile && targetId) {
         const url = await uploadAvatar(targetId);
         if (url) {
@@ -246,30 +245,11 @@ const Profile = () => {
         }
       }
 
-      // --- NEW: handle enrollments (delete old -> insert selected) ---
-      if (targetId) {
-        // delete existing enrollments for this student (idempotent)
-        const { error: delErr } = await supabase.from("enrollments").delete().eq("student_id", targetId);
-        if (delErr) {
-          // non-fatal: log and continue
-          console.warn("delete enrollments error:", delErr);
-        }
-
-        if (selectedCourses && selectedCourses.length > 0) {
-          const rows = selectedCourses.map((course_id) => ({ student_id: targetId, course_id }));
-          const { error: insertEnrollErr } = await supabase.from("enrollments").insert(rows);
-          if (insertEnrollErr) {
-            console.warn("insert enrollments error:", insertEnrollErr);
-            // not throwing to avoid blocking profile save; show toast
-            toast({ title: "Aviso", description: "Erro ao registar inscrições.", variant: "destructive" });
-          }
-        }
-      }
-      // --- end NEW ---
+      // refresh enrollments list after save (in case student was newly created)
+      if (targetId) await fetchEnrollments(targetId);
 
       toast({ title: "Perfil atualizado!", description: "Suas informações foram salvas com sucesso." });
     } catch (err: any) {
-      // Show message; include hint for RLS problems
       const msg = err?.message || String(err);
       const hint = msg.includes("row-level security") ? " — RLS está a bloquear esta operação. Verifique policies/auth_id." : "";
       toast({ title: "Erro", description: msg + hint, variant: "destructive" });
@@ -278,8 +258,73 @@ const Profile = () => {
       setLoading(false);
     }
   };
-  // ...existing code...
 
+  // --- NEW: enrollment operations ---
+  const handleAddEnrollment = async () => {
+    if (!studentId) {
+      toast({ title: "Guardar primeiro", description: "Guarde o perfil antes de registar inscrições.", variant: "destructive" });
+      return;
+    }
+    if (!newCourseId) {
+      toast({ title: "Selecione um curso", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("enrollments").insert({ student_id: studentId, course_id: newCourseId });
+      if (error) throw error;
+      await fetchEnrollments(studentId);
+      setNewCourseId("");
+      toast({ title: "Inscrição adicionada", description: "A sua inscrição foi registada." });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err?.message || "Não foi possível adicionar a inscrição", variant: "destructive" });
+      console.warn("add enrollment error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStartEdit = (id: string, course_id: string) => {
+    setEditingId(id);
+    setEditingCourseId(course_id);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("enrollments").update({ course_id: editingCourseId }).eq("id", editingId);
+      if (error) throw error;
+      if (studentId) await fetchEnrollments(studentId);
+      setEditingId(null);
+      setEditingCourseId("");
+      toast({ title: "Inscrição atualizada" });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err?.message || "Não foi possível editar", variant: "destructive" });
+      console.warn("edit enrollment error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteEnrollment = async (id: string) => {
+    if (!confirm("Eliminar inscrição?")) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.from("enrollments").delete().eq("id", id);
+      if (error) throw error;
+      if (studentId) await fetchEnrollments(studentId);
+      toast({ title: "Inscrição eliminada" });
+    } catch (err: any) {
+      toast({ title: "Erro", description: err?.message || "Não foi possível eliminar", variant: "destructive" });
+      console.warn("delete enrollment error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  // --- end NEW ---
+
+  // ...existing UI code...
   return (
     <div className="space-y-6">
       <div>
@@ -310,7 +355,6 @@ const Profile = () => {
                 const f = e.target.files?.[0] || null;
                 if (f) {
                   setPhotoFile(f);
-                  // preview immediately
                   setProfileData((p) => ({ ...p, photo: URL.createObjectURL(f) }));
                 }
               }}
@@ -329,62 +373,37 @@ const Profile = () => {
             <CardDescription>Atualize seus dados pessoais</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* existing inputs unchanged */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="name">Nome Completo</Label>
-                <Input
-                  id="name"
-                  value={profileData.name}
-                  onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                />
+                <Input id="name" value={profileData.name} onChange={(e) => setProfileData({ ...profileData, name: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bi">Bilhete de Identidade</Label>
-                <Input
-                  id="bi"
-                  value={profileData.bi}
-                  onChange={(e) => setProfileData({ ...profileData, bi: e.target.value })}
-                />
+                <Input id="bi" value={profileData.bi} onChange={(e) => setProfileData({ ...profileData, bi: e.target.value })} />
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={profileData.email}
-                  onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                />
+                <Input id="email" type="email" value={profileData.email} onChange={(e) => setProfileData({ ...profileData, email: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Telefone</Label>
-                <Input
-                  id="phone"
-                  value={profileData.phone}
-                  onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                />
+                <Input id="phone" value={profileData.phone} onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })} />
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="birthDate">Data de Nascimento</Label>
-                <Input
-                  id="birthDate"
-                  type="date"
-                  value={profileData.birthDate}
-                  onChange={(e) => setProfileData({ ...profileData, birthDate: e.target.value })}
-                />
+                <Input id="birthDate" type="date" value={profileData.birthDate} onChange={(e) => setProfileData({ ...profileData, birthDate: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="address">Endereço</Label>
-                <Input
-                  id="address"
-                  value={profileData.address}
-                  onChange={(e) => setProfileData({ ...profileData, address: e.target.value })}
-                />
+                <Input id="address" value={profileData.address} onChange={(e) => setProfileData({ ...profileData, address: e.target.value })} />
               </div>
             </div>
 
@@ -407,31 +426,10 @@ const Profile = () => {
                 <Input id="institution" value={profileData.institution} onChange={(e) => setProfileData({ ...profileData, institution: e.target.value })} />
               </div>
 
-              {/* REPLACED: single course input -> multi-select checkboxes */}
+              {/* course selection (kept text input for backward compatibility) */}
               <div className="space-y-2">
-                <Label>Inscrever-se em Cursos</Label>
-                <div className="max-h-40 overflow-auto border rounded p-2">
-                  {coursesOptions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhum curso disponível</p>
-                  ) : (
-                    coursesOptions.map((c) => {
-                      const checked = selectedCourses.includes(c.id);
-                      return (
-                        <label key={c.id} className="flex items-center gap-2 py-1">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              if (e.target.checked) setSelectedCourses((s) => [...s, c.id]);
-                              else setSelectedCourses((s) => s.filter((id) => id !== c.id));
-                            }}
-                          />
-                          <span className="text-sm">{c.name}{c.price ? ` — ${Number(c.price).toLocaleString("pt-AO")} Kz` : ""}</span>
-                        </label>
-                      );
-                    })
-                  )}
-                </div>
+                <Label htmlFor="course">Curso</Label>
+                <Input id="course" value={profileData.course} onChange={(e) => setProfileData({ ...profileData, course: e.target.value })} />
               </div>
 
               <div className="space-y-2">
@@ -445,6 +443,67 @@ const Profile = () => {
               <div className="space-y-2">
                 <Label htmlFor="final_grade">Nota Final</Label>
                 <Input id="final_grade" type="number" value={profileData.final_grade} onChange={(e) => setProfileData({ ...profileData, final_grade: e.target.value })} />
+              </div>
+            </div>
+
+            {/* Enrollments section (new) */}
+            <div className="pt-4">
+              <h3 className="text-lg font-semibold">Minhas Inscrições</h3>
+
+              <div className="mt-3 mb-4 grid sm:grid-cols-3 gap-3 items-end">
+                <div className="sm:col-span-2">
+                  <Label>Selecionar Curso</Label>
+                  <select className="w-full rounded border px-3 py-2" value={newCourseId} onChange={(e) => setNewCourseId(e.target.value)}>
+                    <option value="">-- selecione --</option>
+                    {coursesOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}{c.price ? ` — ${Number(c.price).toLocaleString("pt-AO")} Kz` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Button onClick={handleAddEnrollment} className="w-full" disabled={loading}>Adicionar Inscrição</Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {enrollments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhuma inscrição registada</p>
+                ) : (
+                  enrollments.map((enr) => {
+                    const course = coursesOptions.find((c) => c.id === enr.course_id);
+                    return (
+                      <div key={enr.id} className="flex items-center justify-between border rounded p-3">
+                        <div>
+                          <div className="font-medium">{course?.name || enr.course_id}</div>
+                          {course?.price ? <div className="text-sm text-muted-foreground">Preço: {Number(course.price).toLocaleString("pt-AO")} Kz</div> : null}
+                          <div className="text-xs text-muted-foreground">Inscrito: {enr.created_at ? new Date(enr.created_at).toLocaleString() : "-"}</div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {editingId === enr.id ? (
+                            <>
+                              <select className="rounded border px-2 py-1" value={editingCourseId} onChange={(e) => setEditingCourseId(e.target.value)}>
+                                <option value="">-- selecione --</option>
+                                {coursesOptions.map((c) => (
+                                  <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                              </select>
+                              <Button onClick={handleSaveEdit} size="sm" disabled={loading}>Salvar</Button>
+                              <Button onClick={() => setEditingId(null)} variant="ghost" size="sm">Cancelar</Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button onClick={() => handleStartEdit(enr.id, enr.course_id)} variant="ghost" size="sm">Editar</Button>
+                              <Button onClick={() => handleDeleteEnrollment(enr.id)} variant="destructive" size="sm">Eliminar</Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
