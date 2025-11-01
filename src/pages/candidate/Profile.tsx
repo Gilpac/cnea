@@ -1,11 +1,11 @@
 // ...existing code...
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Camera, Save } from "lucide-react";
+import { Camera, Save, Eye, Edit, Trash2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import profilePhoto from "@/assets/profile-photo.png";
 import { supabase } from "@/lib/supabase";
@@ -37,12 +37,15 @@ const Profile = () => {
     status: "Ativo",
   });
 
-  // --- NEW: courses + enrollments UI state ---
+  // --- courses + enrollments UI state ---
   const [coursesOptions, setCoursesOptions] = useState<{ id: string; name: string; price?: number | null }[]>([]);
   const [enrollments, setEnrollments] = useState<{ id: string; course_id: string; created_at?: string }[]>([]);
   const [newCourseId, setNewCourseId] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingCourseId, setEditingCourseId] = useState<string>("");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 6;
 
   const fetchCourses = async () => {
     try {
@@ -70,45 +73,28 @@ const Profile = () => {
       console.warn("fetchEnrollments error:", err);
     }
   };
-  // --- end new ---
+  // --- end state ---
 
   useEffect(() => {
     (async () => {
       try {
         const { data: userData, error: userErr } = await supabase.auth.getUser();
-        if (userErr) {
-          console.warn("auth.getUser:", userErr.message);
-        }
+        if (userErr) console.warn("auth.getUser:", userErr.message);
         const user = (userData as any)?.user;
-        if (!user) {
-          // no user: keep defaults
-          return;
-        }
+        if (!user) return;
 
-        // fetch available courses (for enrollments UI)
         fetchCourses();
 
-        // Try to find student record: prefer auth id if column exists, otherwise by email
         let studentRecord: any = null;
-
-        // try auth id match (if your students table has auth_id)
         try {
-          const { data: byAuthId, error: errAuth } = await supabase
-            .from("students")
-            .select("*")
-            .eq("auth_id", user.id)
-            .maybeSingle();
+          const { data: byAuthId, error: errAuth } = await supabase.from("students").select("*").eq("auth_id", user.id).maybeSingle();
           if (!errAuth && byAuthId) studentRecord = byAuthId;
         } catch (err) {
           console.warn("auth_id lookup skipped (column may not exist):", err);
         }
 
         if (!studentRecord && user.email) {
-          const { data: byEmail, error: errEmail } = await supabase
-            .from("students")
-            .select("*")
-            .eq("email", user.email)
-            .maybeSingle();
+          const { data: byEmail, error: errEmail } = await supabase.from("students").select("*").eq("email", user.email).maybeSingle();
           if (!errEmail && byEmail) studentRecord = byEmail;
         }
 
@@ -133,10 +119,8 @@ const Profile = () => {
             status: studentRecord.status || "Ativo",
           });
 
-          // load enrollments for this student
           fetchEnrollments(studentRecord.id);
         } else {
-          // no student record: prefill from auth user
           setProfileData((p) => ({
             ...p,
             name: user.user_metadata?.full_name || user.raw_user_meta_data?.full_name || p.name,
@@ -173,13 +157,11 @@ const Profile = () => {
     }
   };
 
-  // ...existing code...
+  // helper: check if students.auth_id column exists
   const authIdColumnExists = async (): Promise<boolean> => {
     try {
       const { error } = await supabase.from("students").select("auth_id").limit(1);
-      if (error) {
-        return false;
-      }
+      if (error) return false;
       return true;
     } catch {
       return false;
@@ -213,19 +195,8 @@ const Profile = () => {
 
       if (!targetId) {
         const hasAuthId = await authIdColumnExists();
-        const insertPayload = {
-          ...payload,
-          has_certificate: false,
-          ...(hasAuthId ? { auth_id: user?.id || null } : {}),
-        };
-
-        const { data: insertData, error: insertErr } = await supabase
-          .from("students")
-          .insert(insertPayload)
-          .select()
-          .limit(1)
-          .single();
-
+        const insertPayload = { ...payload, has_certificate: false, ...(hasAuthId ? { auth_id: user?.id || null } : {}) };
+        const { data: insertData, error: insertErr } = await supabase.from("students").insert(insertPayload).select().limit(1).single();
         if (insertErr) {
           console.warn("insert student error:", insertErr);
           throw insertErr;
@@ -245,7 +216,6 @@ const Profile = () => {
         }
       }
 
-      // refresh enrollments list after save (in case student was newly created)
       if (targetId) await fetchEnrollments(targetId);
 
       toast({ title: "Perfil atualizado!", description: "Suas informações foram salvas com sucesso." });
@@ -259,7 +229,7 @@ const Profile = () => {
     }
   };
 
-  // --- NEW: enrollment operations ---
+  // enrollment operations
   const handleAddEnrollment = async () => {
     if (!studentId) {
       toast({ title: "Guardar primeiro", description: "Guarde o perfil antes de registar inscrições.", variant: "destructive" });
@@ -322,14 +292,28 @@ const Profile = () => {
       setLoading(false);
     }
   };
-  // --- end NEW ---
 
-  // ...existing UI code...
+  // derived / UI helpers
+  const enrichedEnrollments = useMemo(() => {
+    return enrollments.map((e) => {
+      const course = coursesOptions.find((c) => c.id === e.course_id);
+      return { ...e, courseName: course?.name || e.course_id, price: course?.price || null };
+    });
+  }, [enrollments, coursesOptions]);
+
+  const filtered = enrichedEnrollments.filter((e) => {
+    if (!query) return true;
+    return e.courseName.toLowerCase().includes(query.toLowerCase());
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageItems = filtered.slice((page - 1) * pageSize, page * pageSize);
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Meu Perfil</h2>
-        <p className="text-muted-foreground">Gerencie suas informações pessoais</p>
+        <p className="text-muted-foreground">Gerencie suas informações pessoais e inscrições</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -341,28 +325,19 @@ const Profile = () => {
           <CardContent className="flex flex-col items-center gap-4">
             <Avatar className="h-32 w-32">
               <AvatarImage src={profileData.photo || profilePhoto} alt={profileData.name} />
-              <AvatarFallback className="text-3xl">
-                {(profileData.name || "").split(' ').map(n => n[0]).join('')}
-              </AvatarFallback>
+              <AvatarFallback className="text-3xl">{(profileData.name || "").split(" ").map((n) => n?.[0]).join("")}</AvatarFallback>
             </Avatar>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                const f = e.target.files?.[0] || null;
-                if (f) {
-                  setPhotoFile(f);
-                  setProfileData((p) => ({ ...p, photo: URL.createObjectURL(f) }));
-                }
-              }}
-            />
+            <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => {
+              const f = e.target.files?.[0] || null;
+              if (f) {
+                setPhotoFile(f);
+                setProfileData((p) => ({ ...p, photo: URL.createObjectURL(f) }));
+              }
+            }} />
 
             <Button variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()}>
-              <Camera className="mr-2 h-4 w-4" />
-              Alterar Foto
+              <Camera className="mr-2 h-4 w-4" /> Alterar Foto
             </Button>
           </CardContent>
         </Card>
@@ -373,7 +348,7 @@ const Profile = () => {
             <CardDescription>Atualize seus dados pessoais</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* existing inputs unchanged */}
+            {/* basic fields (kept) */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="name">Nome Completo</Label>
@@ -385,6 +360,7 @@ const Profile = () => {
               </div>
             </div>
 
+            {/* second row */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -396,122 +372,119 @@ const Profile = () => {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            {/* academic small inputs */}
+            <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="birthDate">Data de Nascimento</Label>
-                <Input id="birthDate" type="date" value={profileData.birthDate} onChange={(e) => setProfileData({ ...profileData, birthDate: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="address">Endereço</Label>
-                <Input id="address" value={profileData.address} onChange={(e) => setProfileData({ ...profileData, address: e.target.value })} />
-              </div>
-            </div>
-
-            {/* additional fields for enrollment */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="nationality">Nacionalidade</Label>
-                <Input id="nationality" value={profileData.nationality} onChange={(e) => setProfileData({ ...profileData, nationality: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="municipality">Município</Label>
-                <Input id="municipality" value={profileData.municipality} onChange={(e) => setProfileData({ ...profileData, municipality: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="province">Província</Label>
-                <Input id="province" value={profileData.province} onChange={(e) => setProfileData({ ...profileData, province: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="institution">Instituição</Label>
+                <Label htmlFor="institution">Instituição (opcional)</Label>
                 <Input id="institution" value={profileData.institution} onChange={(e) => setProfileData({ ...profileData, institution: e.target.value })} />
               </div>
-
-              {/* course selection (kept text input for backward compatibility) */}
               <div className="space-y-2">
-                <Label htmlFor="course">Curso</Label>
-                <Input id="course" value={profileData.course} onChange={(e) => setProfileData({ ...profileData, course: e.target.value })} />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="year">Ano</Label>
+                <Label htmlFor="year">Ano (opcional)</Label>
                 <Input id="year" type="number" value={profileData.year} onChange={(e) => setProfileData({ ...profileData, year: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="shift">Turno</Label>
                 <Input id="shift" value={profileData.shift} onChange={(e) => setProfileData({ ...profileData, shift: e.target.value })} />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="final_grade">Nota Final</Label>
-                <Input id="final_grade" type="number" value={profileData.final_grade} onChange={(e) => setProfileData({ ...profileData, final_grade: e.target.value })} />
+            </div>
+
+            <div className="pt-4 flex items-center gap-3">
+              <Button onClick={handleSave} disabled={loading}><Save className="mr-2 h-4 w-4" />{loading ? "A processar..." : "Salvar Alterações"}</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Enrollments / Admin-like listing */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-2xl font-semibold">Minhas Inscrições</h3>
+          <div className="flex gap-3">
+            <Input placeholder="Pesquisar curso..." value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} />
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-4 mb-4">
+          <Card>
+            <CardContent>
+              <div className="text-sm text-muted-foreground">Total Inscrições</div>
+              <div className="text-2xl font-bold">{enrollments.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent>
+              <div className="text-sm text-muted-foreground">Cursos Disponíveis</div>
+              <div className="text-2xl font-bold">{coursesOptions.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent>
+              <div className="text-sm text-muted-foreground">Nota Final</div>
+              <div className="text-2xl font-bold">{profileData.final_grade || "-"}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent>
+              <div className="text-sm text-muted-foreground">Status</div>
+              <div className="text-2xl font-bold">{profileData.status}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardContent>
+            <div className="mb-4 grid sm:grid-cols-3 gap-3 items-end">
+              <div className="sm:col-span-2">
+                <Label>Adicionar nova inscrição</Label>
+                <select className="w-full rounded border px-3 py-2" value={newCourseId} onChange={(e) => setNewCourseId(e.target.value)}>
+                  <option value="">-- selecione curso --</option>
+                  {coursesOptions.map((c) => <option key={c.id} value={c.id}>{c.name}{c.price ? ` — ${Number(c.price).toLocaleString("pt-AO")} Kz` : ""}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleAddEnrollment} disabled={loading}><Plus className="mr-2 h-4 w-4" />Adicionar</Button>
               </div>
             </div>
 
-            {/* Enrollments section (new) */}
-            <div className="pt-4">
-              <h3 className="text-lg font-semibold">Minhas Inscrições</h3>
-
-              <div className="mt-3 mb-4 grid sm:grid-cols-3 gap-3 items-end">
-                <div className="sm:col-span-2">
-                  <Label>Selecionar Curso</Label>
-                  <select className="w-full rounded border px-3 py-2" value={newCourseId} onChange={(e) => setNewCourseId(e.target.value)}>
-                    <option value="">-- selecione --</option>
-                    {coursesOptions.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}{c.price ? ` — ${Number(c.price).toLocaleString("pt-AO")} Kz` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <Button onClick={handleAddEnrollment} className="w-full" disabled={loading}>Adicionar Inscrição</Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {enrollments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nenhuma inscrição registada</p>
-                ) : (
-                  enrollments.map((enr) => {
-                    const course = coursesOptions.find((c) => c.id === enr.course_id);
-                    return (
-                      <div key={enr.id} className="flex items-center justify-between border rounded p-3">
-                        <div>
-                          <div className="font-medium">{course?.name || enr.course_id}</div>
-                          {course?.price ? <div className="text-sm text-muted-foreground">Preço: {Number(course.price).toLocaleString("pt-AO")} Kz</div> : null}
-                          <div className="text-xs text-muted-foreground">Inscrito: {enr.created_at ? new Date(enr.created_at).toLocaleString() : "-"}</div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-sm text-muted-foreground">
+                    <th className="py-2">Curso</th>
+                    <th className="py-2">Preço</th>
+                    <th className="py-2">Inscrito Em</th>
+                    <th className="py-2">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageItems.length === 0 ? (
+                    <tr><td colSpan={4} className="py-6 text-center text-sm text-muted-foreground">Nenhuma inscrição encontrada</td></tr>
+                  ) : pageItems.map((enr) => (
+                    <tr key={enr.id} className="border-t">
+                      <td className="py-3">{enr.courseName}</td>
+                      <td className="py-3">{enr.price ? `${Number(enr.price).toLocaleString("pt-AO")} Kz` : "-"}</td>
+                      <td className="py-3">{enr.created_at ? new Date(enr.created_at).toLocaleString() : "-"}</td>
+                      <td className="py-3">
+                        <div className="flex gap-2">
+                          <Button variant="ghost" onClick={() => alert(`Visualizar: ${enr.courseName}`)}><Eye /></Button>
+                          <Button variant="ghost" onClick={() => handleStartEdit(enr.id, enr.course_id)}><Edit /></Button>
+                          <Button variant="destructive" onClick={() => handleDeleteEnrollment(enr.id)}><Trash2 /></Button>
                         </div>
-
-                        <div className="flex items-center gap-2">
-                          {editingId === enr.id ? (
-                            <>
-                              <select className="rounded border px-2 py-1" value={editingCourseId} onChange={(e) => setEditingCourseId(e.target.value)}>
-                                <option value="">-- selecione --</option>
-                                {coursesOptions.map((c) => (
-                                  <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                              </select>
-                              <Button onClick={handleSaveEdit} size="sm" disabled={loading}>Salvar</Button>
-                              <Button onClick={() => setEditingId(null)} variant="ghost" size="sm">Cancelar</Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button onClick={() => handleStartEdit(enr.id, enr.course_id)} variant="ghost" size="sm">Editar</Button>
-                              <Button onClick={() => handleDeleteEnrollment(enr.id)} variant="destructive" size="sm">Eliminar</Button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            <div className="pt-4">
-              <Button onClick={handleSave} className="w-full sm:w-auto" disabled={loading}>
-                <Save className="mr-2 h-4 w-4" />
-                {loading ? "A processar..." : "Salvar Alterações"}
-              </Button>
+            {/* pagination */}
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-muted-foreground">Mostrando {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, filtered.length)} de {filtered.length}</div>
+              <div className="flex gap-2">
+                <Button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Previous</Button>
+                <div className="px-3 py-2 border rounded">{page} / {totalPages}</div>
+                <Button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next</Button>
+              </div>
             </div>
           </CardContent>
         </Card>
