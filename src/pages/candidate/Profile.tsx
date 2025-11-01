@@ -9,6 +9,7 @@ import { Camera, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import profilePhoto from "@/assets/profile-photo.png";
 import { supabase } from "@/lib/supabase";
+// ...existing code...
 
 const Profile = () => {
   const { toast } = useToast();
@@ -36,6 +37,24 @@ const Profile = () => {
     status: "Ativo",
   });
 
+  // --- NEW: courses + selected courses (multiple) ---
+  const [coursesOptions, setCoursesOptions] = useState<{ id: string; name: string; price?: number | null }[]>([]);
+  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+
+  const fetchCourses = async () => {
+    try {
+      const { data, error } = await supabase.from("courses").select("id, name, price").order("name", { ascending: true });
+      if (error) {
+        console.warn("fetchCourses:", error);
+        return;
+      }
+      setCoursesOptions((data as any) || []);
+    } catch (err) {
+      console.warn("fetchCourses error:", err);
+    }
+  };
+  // --- end new ---
+
   useEffect(() => {
     (async () => {
       try {
@@ -48,6 +67,9 @@ const Profile = () => {
           // no user: keep defaults
           return;
         }
+
+        // fetch available courses (for multi-select)
+        fetchCourses();
 
         // Try to find student record: prefer auth id if column exists, otherwise by email
         let studentRecord: any = null;
@@ -95,6 +117,20 @@ const Profile = () => {
             final_grade: studentRecord.final_grade ? String(studentRecord.final_grade) : "",
             status: studentRecord.status || "Ativo",
           });
+
+          // NEW: load existing enrollments (course ids) for this student
+          try {
+            const { data: enrolls, error: enrollErr } = await supabase
+              .from("enrollments")
+              .select("course_id")
+              .eq("student_id", studentRecord.id);
+            if (!enrollErr && enrolls) {
+              setSelectedCourses((enrolls as any).map((r: any) => r.course_id));
+            }
+          } catch (e) {
+            console.warn("load enrollments error:", e);
+          }
+          // end NEW
         } else {
           // no student record: prefill from auth user
           setProfileData((p) => ({
@@ -128,7 +164,8 @@ const Profile = () => {
       return null;
     }
   };
-// ...existing code...
+
+  // ...existing code...
   // helper: check if students.auth_id column exists
   const authIdColumnExists = async (): Promise<boolean> => {
     try {
@@ -209,6 +246,27 @@ const Profile = () => {
         }
       }
 
+      // --- NEW: handle enrollments (delete old -> insert selected) ---
+      if (targetId) {
+        // delete existing enrollments for this student (idempotent)
+        const { error: delErr } = await supabase.from("enrollments").delete().eq("student_id", targetId);
+        if (delErr) {
+          // non-fatal: log and continue
+          console.warn("delete enrollments error:", delErr);
+        }
+
+        if (selectedCourses && selectedCourses.length > 0) {
+          const rows = selectedCourses.map((course_id) => ({ student_id: targetId, course_id }));
+          const { error: insertEnrollErr } = await supabase.from("enrollments").insert(rows);
+          if (insertEnrollErr) {
+            console.warn("insert enrollments error:", insertEnrollErr);
+            // not throwing to avoid blocking profile save; show toast
+            toast({ title: "Aviso", description: "Erro ao registar inscrições.", variant: "destructive" });
+          }
+        }
+      }
+      // --- end NEW ---
+
       toast({ title: "Perfil atualizado!", description: "Suas informações foram salvas com sucesso." });
     } catch (err: any) {
       // Show message; include hint for RLS problems
@@ -220,7 +278,7 @@ const Profile = () => {
       setLoading(false);
     }
   };
-// ...existing code...
+  // ...existing code...
 
   return (
     <div className="space-y-6">
@@ -348,10 +406,34 @@ const Profile = () => {
                 <Label htmlFor="institution">Instituição</Label>
                 <Input id="institution" value={profileData.institution} onChange={(e) => setProfileData({ ...profileData, institution: e.target.value })} />
               </div>
+
+              {/* REPLACED: single course input -> multi-select checkboxes */}
               <div className="space-y-2">
-                <Label htmlFor="course">Curso</Label>
-                <Input id="course" value={profileData.course} onChange={(e) => setProfileData({ ...profileData, course: e.target.value })} />
+                <Label>Inscrever-se em Cursos</Label>
+                <div className="max-h-40 overflow-auto border rounded p-2">
+                  {coursesOptions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum curso disponível</p>
+                  ) : (
+                    coursesOptions.map((c) => {
+                      const checked = selectedCourses.includes(c.id);
+                      return (
+                        <label key={c.id} className="flex items-center gap-2 py-1">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedCourses((s) => [...s, c.id]);
+                              else setSelectedCourses((s) => s.filter((id) => id !== c.id));
+                            }}
+                          />
+                          <span className="text-sm">{c.name}{c.price ? ` — ${Number(c.price).toLocaleString("pt-AO")} Kz` : ""}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="year">Ano</Label>
                 <Input id="year" type="number" value={profileData.year} onChange={(e) => setProfileData({ ...profileData, year: e.target.value })} />
