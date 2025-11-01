@@ -1,6 +1,4 @@
 // ...existing code...
-"use client";
-
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +9,6 @@ import { Camera, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import profilePhoto from "@/assets/profile-photo.png";
 import { supabase } from "@/lib/supabase";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const Profile = () => {
   const { toast } = useToast();
@@ -31,7 +28,6 @@ const Profile = () => {
     nationality: "",
     municipality: "",
     province: "",
-    // enrollment-only fields keep in state but not shown here:
     institution: "",
     course: "",
     year: "",
@@ -40,25 +36,7 @@ const Profile = () => {
     status: "Ativo",
   });
 
-  // courses dropdown (name + price) loaded from DB
-  const [coursesOptions, setCoursesOptions] = useState<{ id: string; name: string; price?: number | null }[]>([]);
-
-  const fetchCourses = async () => {
-    try {
-      const { data, error } = await supabase.from("courses").select("id,name,price").order("name", { ascending: true });
-      if (error) {
-        console.warn("fetchCourses:", error.message);
-        return;
-      }
-      setCoursesOptions((data as any) || []);
-    } catch (err) {
-      console.warn("fetchCourses error:", err);
-    }
-  };
-
   useEffect(() => {
-    fetchCourses();
-
     (async () => {
       try {
         const { data: userData, error: userErr } = await supabase.auth.getUser();
@@ -66,23 +44,21 @@ const Profile = () => {
           console.warn("auth.getUser:", userErr.message);
         }
         const user = (userData as any)?.user;
-        if (!user) return;
+        if (!user) {
+          // no user: keep defaults
+          return;
+        }
 
-        // Try to find student record: prefer auth_id if exists, otherwise by email.
-        // Wrap auth_id lookup in try/catch because the column may not exist in the schema.
+        // Try to find student record: prefer auth id if column exists, otherwise by email
         let studentRecord: any = null;
 
-        try {
-          const { data: byAuthId, error: errAuth } = await supabase
-            .from("students")
-            .select("*")
-            .eq("auth_id", user.id)
-            .maybeSingle();
-          if (!errAuth && byAuthId) studentRecord = byAuthId;
-        } catch (err) {
-          // Column auth_id likely doesn't exist -> skip silently
-          console.warn("auth_id lookup skipped:", err);
-        }
+        // try auth id match (if your students table has auth_id)
+        const { data: byAuthId, error: errAuth } = await supabase
+          .from("students")
+          .select("*")
+          .eq("auth_id", user.id)
+          .maybeSingle();
+        if (!errAuth && byAuthId) studentRecord = byAuthId;
 
         if (!studentRecord && user.email) {
           const { data: byEmail, error: errEmail } = await supabase
@@ -101,7 +77,7 @@ const Profile = () => {
             phone: studentRecord.phone || "",
             bi: studentRecord.id_number || "",
             address: studentRecord.address || "",
-            birthDate: studentRecord.birth_date ? String(studentRecord.birth_date).split("T")[0] : "",
+            birthDate: studentRecord.birth_date ? studentRecord.birth_date.split("T")[0] : "",
             photo: studentRecord.photo_url || profilePhoto,
             nationality: studentRecord.nationality || "",
             municipality: studentRecord.municipality || "",
@@ -114,6 +90,7 @@ const Profile = () => {
             status: studentRecord.status || "Ativo",
           });
         } else {
+          // no student record: prefill from auth user
           setProfileData((p) => ({
             ...p,
             name: user.user_metadata?.full_name || user.raw_user_meta_data?.full_name || p.name,
@@ -149,10 +126,10 @@ const Profile = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
-      const { data: ud } = await supabase.auth.getUser();
+      // get auth user
+      const { data: ud, error: ue } = await supabase.auth.getUser();
       const user = (ud as any)?.user;
-
-      // Prepare payload (do not include auth_id to avoid schema cache errors)
+      // Prepare payload
       const payload: any = {
         full_name: profileData.name || null,
         email: profileData.email || null,
@@ -163,32 +140,40 @@ const Profile = () => {
         nationality: profileData.nationality || null,
         municipality: profileData.municipality || null,
         province: profileData.province || null,
-        // store course name from dropdown (price available in coursesOptions)
+        institution: profileData.institution || null,
         course: profileData.course || null,
+        year: profileData.year ? Number(profileData.year) : null,
+        shift: profileData.shift || null,
+        final_grade: profileData.final_grade ? Number(profileData.final_grade) : null,
         status: profileData.status || "Ativo",
       };
 
       let targetId = studentId;
 
       if (!targetId) {
-        // insert new student — do NOT include auth_id
+        // insert new student
         const { data: insertData, error: insertErr } = await supabase
           .from("students")
           .insert({
             ...payload,
             has_certificate: false,
+            auth_id: user?.id || null, // optional column if present
           })
           .select()
           .limit(1)
           .single();
-        if (insertErr) throw insertErr;
+        if (insertErr) {
+          throw insertErr;
+        }
         targetId = (insertData as any).id;
         setStudentId(targetId);
       } else {
+        // update existing
         const { error: updateErr } = await supabase.from("students").update(payload).eq("id", targetId);
         if (updateErr) throw updateErr;
       }
 
+      // upload avatar if selected
       if (photoFile && targetId) {
         const url = await uploadAvatar(targetId);
         if (url) {
@@ -223,7 +208,7 @@ const Profile = () => {
             <Avatar className="h-32 w-32">
               <AvatarImage src={profileData.photo || profilePhoto} alt={profileData.name} />
               <AvatarFallback className="text-3xl">
-                {(profileData.name || "").split(" ").filter(Boolean).map(n => n[0]).join("")}
+                {(profileData.name || "").split(' ').map(n => n[0]).join('')}
               </AvatarFallback>
             </Avatar>
 
@@ -236,6 +221,7 @@ const Profile = () => {
                 const f = e.target.files?.[0] || null;
                 if (f) {
                   setPhotoFile(f);
+                  // preview immediately
                   setProfileData((p) => ({ ...p, photo: URL.createObjectURL(f) }));
                 }
               }}
@@ -313,6 +299,7 @@ const Profile = () => {
               </div>
             </div>
 
+            {/* additional fields for enrollment */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="nationality">Nacionalidade</Label>
@@ -326,29 +313,27 @@ const Profile = () => {
                 <Label htmlFor="province">Província</Label>
                 <Input id="province" value={profileData.province} onChange={(e) => setProfileData({ ...profileData, province: e.target.value })} />
               </div>
-
+              <div className="space-y-2">
+                <Label htmlFor="institution">Instituição</Label>
+                <Input id="institution" value={profileData.institution} onChange={(e) => setProfileData({ ...profileData, institution: e.target.value })} />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="course">Curso</Label>
-                <Select value={profileData.course || ""} onValueChange={(v) => setProfileData({ ...profileData, course: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o curso" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {coursesOptions.length === 0 ? (
-                      <SelectItem value="">Sem cursos</SelectItem>
-                    ) : (
-                      coursesOptions.map((c) => (
-                        <SelectItem key={c.id} value={c.name}>
-                          {c.name}{c.price ? ` — ${Number(c.price).toLocaleString("pt-AO")} Kz` : ""}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                <Input id="course" value={profileData.course} onChange={(e) => setProfileData({ ...profileData, course: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="year">Ano</Label>
+                <Input id="year" type="number" value={profileData.year} onChange={(e) => setProfileData({ ...profileData, year: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="shift">Turno</Label>
+                <Input id="shift" value={profileData.shift} onChange={(e) => setProfileData({ ...profileData, shift: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="final_grade">Nota Final</Label>
+                <Input id="final_grade" type="number" value={profileData.final_grade} onChange={(e) => setProfileData({ ...profileData, final_grade: e.target.value })} />
               </div>
             </div>
-
-            {/* institution, year, shift, final_grade are enrollment-specific and intentionally hidden */}
 
             <div className="pt-4">
               <Button onClick={handleSave} className="w-full sm:w-auto" disabled={loading}>
