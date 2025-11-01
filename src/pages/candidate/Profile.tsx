@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Camera, Save, Eye, Edit, Trash2, Plus } from "lucide-react";
+import { Camera, Save, Eye, Trash2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import profilePhoto from "@/assets/profile-photo.png";
 import { supabase } from "@/lib/supabase";
@@ -278,13 +278,13 @@ const Profile = () => {
   };
 
   const handleDeleteEnrollment = async (id: string) => {
-    if (!confirm("Eliminar inscrição?")) return;
+    // remove confirm() and perform deletion directly; show toast on success/failure
     setLoading(true);
     try {
       const { error } = await supabase.from("enrollments").delete().eq("id", id);
       if (error) throw error;
       if (studentId) await fetchEnrollments(studentId);
-      toast({ title: "Inscrição eliminada" });
+      toast({ title: "Inscrição eliminada", description: "A sua inscrição foi removida com sucesso." });
     } catch (err: any) {
       toast({ title: "Erro", description: err?.message || "Não foi possível eliminar", variant: "destructive" });
       console.warn("delete enrollment error:", err);
@@ -466,8 +466,8 @@ const Profile = () => {
                       <td className="py-3">{enr.created_at ? new Date(enr.created_at).toLocaleString() : "-"}</td>
                       <td className="py-3">
                         <div className="flex gap-2">
-                          <Button variant="ghost" onClick={() => alert(`Visualizar: ${enr.courseName}`)}><Eye /></Button>
-                          <Button variant="ghost" onClick={() => handleStartEdit(enr.id, enr.course_id)}><Edit /></Button>
+                          {/* <Button variant="ghost" onClick={() => alert(`Visualizar: ${enr.courseName}`)}><Eye /></Button> */}
+                          {/* <Button variant="ghost" onClick={() => handleStartEdit(enr.id, enr.course_id)}><Edit /></Button> */}
                           <Button variant="destructive" onClick={() => handleDeleteEnrollment(enr.id)}><Trash2 /></Button>
                         </div>
                       </td>
