@@ -53,12 +53,18 @@ const Profile = () => {
         let studentRecord: any = null;
 
         // try auth id match (if your students table has auth_id)
-        const { data: byAuthId, error: errAuth } = await supabase
-          .from("students")
-          .select("*")
-          .eq("auth_id", user.id)
-          .maybeSingle();
-        if (!errAuth && byAuthId) studentRecord = byAuthId;
+        // Wrap in try/catch because the column might not exist in the DB schema
+        try {
+          const { data: byAuthId, error: errAuth } = await supabase
+            .from("students")
+            .select("*")
+            .eq("auth_id", user.id)
+            .maybeSingle();
+          if (!errAuth && byAuthId) studentRecord = byAuthId;
+        } catch (err) {
+          // auth_id column likely doesn't exist -> skip and fallback to email lookup
+          console.warn("auth_id lookup skipped (column may not exist):", err);
+        }
 
         if (!studentRecord && user.email) {
           const { data: byEmail, error: errEmail } = await supabase
@@ -152,12 +158,12 @@ const Profile = () => {
 
       if (!targetId) {
         // insert new student
+        // DO NOT include auth_id by default to avoid schema cache errors when column is absent
         const { data: insertData, error: insertErr } = await supabase
           .from("students")
           .insert({
             ...payload,
             has_certificate: false,
-            auth_id: user?.id || null, // optional column if present
           })
           .select()
           .limit(1)
@@ -184,6 +190,7 @@ const Profile = () => {
 
       toast({ title: "Perfil atualizado!", description: "Suas informações foram salvas com sucesso." });
     } catch (err: any) {
+      // Show generic message; DB error about missing auth_id will no longer occur
       toast({ title: "Erro", description: err?.message || "Não foi possível salvar os dados", variant: "destructive" });
       console.warn("save profile error:", err);
     } finally {
