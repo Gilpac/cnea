@@ -37,6 +37,33 @@ const Profile = () => {
     status: "Ativo",
   });
 
+  // --- new: document uploads state (5 documentos) ---
+  type DocKey = "cv" | "bi_doc" | "passport_photo" | "payment" | "declaration";
+  const docKeys: { key: DocKey; label: string }[] = [
+    { key: "cv", label: "CV" },
+    { key: "bi_doc", label: "Bilhete de Identidade" },
+    { key: "passport_photo", label: "Fotografia tipo passe" },
+    { key: "payment", label: "Comprovativo de Pagamento" },
+    { key: "declaration", label: "Declaração / Certificado" },
+  ];
+
+  const [docFiles, setDocFiles] = useState<Record<DocKey, File | null>>({
+    cv: null,
+    bi_doc: null,
+    passport_photo: null,
+    payment: null,
+    declaration: null,
+  });
+
+  const [docUrls, setDocUrls] = useState<Record<DocKey, string | null>>({
+    cv: null,
+    bi_doc: null,
+    passport_photo: null,
+    payment: null,
+    declaration: null,
+  });
+  // --- end new ---
+
   // --- courses + enrollments UI state ---
   const [coursesOptions, setCoursesOptions] = useState<{ id: string; name: string; price?: number | null }[]>([]);
   const [enrollments, setEnrollments] = useState<{ id: string; course_id: string; created_at?: string }[]>([]);
@@ -119,6 +146,15 @@ const Profile = () => {
             status: studentRecord.status || "Ativo",
           });
 
+          // populate docUrls from student record if present
+          setDocUrls({
+            cv: studentRecord.doc_cv_url || null,
+            bi_doc: studentRecord.doc_bi_url || null,
+            passport_photo: studentRecord.doc_passport_photo_url || null,
+            payment: studentRecord.doc_payment_url || null,
+            declaration: studentRecord.doc_declaration_url || null,
+          });
+
           fetchEnrollments(studentRecord.id);
         } else {
           setProfileData((p) => ({
@@ -156,6 +192,28 @@ const Profile = () => {
       return null;
     }
   };
+
+  // --- new: upload a single document and return public url ---
+  const uploadDocument = async (targetId: string, key: DocKey, file: File | null) => {
+    if (!file) return null;
+    try {
+      const path = `profiles/${targetId}/docs/${key}-${Date.now()}-${file.name}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage.from("student-docs").upload(path, file, {
+        cacheControl: "3600",
+        upsert: true,
+      });
+      if (uploadError) {
+        console.warn("uploadDocument error:", uploadError);
+        return null;
+      }
+      const { data: urlData } = supabase.storage.from("student-docs").getPublicUrl(path);
+      return (urlData as any)?.publicUrl || null;
+    } catch (err) {
+      console.warn("uploadDocument exception:", err);
+      return null;
+    }
+  };
+  // --- end new ---
 
   // helper: check if students.auth_id column exists
   const authIdColumnExists = async (): Promise<boolean> => {
@@ -215,6 +273,38 @@ const Profile = () => {
           setProfileData((p) => ({ ...p, photo: url }));
         }
       }
+
+      // --- new: upload documents if any selected and save URLs on student row ---
+      if (targetId) {
+        const updates: Record<string, any> = {};
+
+        for (const { key } of docKeys) {
+          const file = docFiles[key];
+          if (file) {
+            const url = await uploadDocument(targetId, key, file);
+            if (url) {
+              // map keys to student columns
+              if (key === "cv") updates["doc_cv_url"] = url;
+              if (key === "bi_doc") updates["doc_bi_url"] = url;
+              if (key === "passport_photo") updates["doc_passport_photo_url"] = url;
+              if (key === "payment") updates["doc_payment_url"] = url;
+              if (key === "declaration") updates["doc_declaration_url"] = url;
+              // update local state
+              setDocUrls((d) => ({ ...d, [key]: url }));
+            }
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          const { error: docUpdateErr } = await supabase.from("students").update(updates).eq("id", targetId);
+          if (docUpdateErr) {
+            console.warn("error saving doc urls to student row:", docUpdateErr);
+            // not fatal: show toast and continue
+            toast({ title: "Aviso", description: "Documentos carregados mas erro ao salvar referências.", variant: "destructive" });
+          }
+        }
+      }
+      // --- end new ---
 
       if (targetId) await fetchEnrollments(targetId);
 
@@ -292,6 +382,30 @@ const Profile = () => {
       setLoading(false);
     }
   };
+
+  // --- new: view / download helpers ---
+  const handleViewDocument = (url: string | null) => {
+    if (!url) {
+      toast({ title: "Nenhum documento", description: "Nenhum documento disponível para visualização.", variant: "destructive" });
+      return;
+    }
+    window.open(url, "_blank");
+  };
+
+  const handleDownloadDocument = (url: string | null, filename?: string) => {
+    if (!url) {
+      toast({ title: "Nenhum documento", description: "Nenhum documento disponível para download.", variant: "destructive" });
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = url;
+    if (filename) a.download = filename;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+  // --- end new ---
 
   // derived / UI helpers
   const enrichedEnrollments = useMemo(() => {
@@ -395,6 +509,41 @@ const Profile = () => {
         </Card>
       </div>
 
+      {/* DOCUMENTS CARD (new) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Documentos</CardTitle>
+          <CardDescription>Carregue até 5 documentos: CV, BI, Foto tipo passe, Comprovativo de pagamento, Declaração/Certificado</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {docKeys.map(({ key, label }) => (
+              <div key={key} className="space-y-2">
+                <Label>{label}</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      setDocFiles((d) => ({ ...d, [key]: f }));
+                    }}
+                  />
+                  <Button onClick={() => handleViewDocument(docUrls[key])} variant="outline">Visualizar</Button>
+                  <Button onClick={() => handleDownloadDocument(docUrls[key], `${profileData.name || "documento"}-${key}`)} variant="ghost">Descarregar</Button>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {docFiles[key] ? `Ficheiro pronto a enviar: ${docFiles[key]?.name}` : (docUrls[key] ? `Ficheiro carregado: ${docUrls[key].split("/").pop()}` : "Nenhum ficheiro")}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="pt-4">
+            <div className="text-sm text-muted-foreground">Nota: guarde o perfil para enviar os ficheiros. Os ficheiros são armazenados no bucket <code>student-docs</code>.</div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Enrollments / Admin-like listing */}
       <div>
         <div className="flex items-center justify-between mb-4">
@@ -466,8 +615,7 @@ const Profile = () => {
                       <td className="py-3">{enr.created_at ? new Date(enr.created_at).toLocaleString() : "-"}</td>
                       <td className="py-3">
                         <div className="flex gap-2">
-                          {/* <Button variant="ghost" onClick={() => alert(`Visualizar: ${enr.courseName}`)}><Eye /></Button> */}
-                          {/* <Button variant="ghost" onClick={() => handleStartEdit(enr.id, enr.course_id)}><Edit /></Button> */}
+                          <Button variant="ghost" onClick={() => handleViewDocument(docUrls["cv"])}><Eye /></Button>
                           <Button variant="destructive" onClick={() => handleDeleteEnrollment(enr.id)}><Trash2 /></Button>
                         </div>
                       </td>
