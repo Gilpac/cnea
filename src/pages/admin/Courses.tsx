@@ -74,7 +74,7 @@ const Courses = () => {
 
   const handleAddCourse = async () => {
     if (!addForm.name.trim()) {
-      toast({ title: "Erro", description: "Nome do curso é obrigatório", variant: "destructive" });
+      toast({ title: "Erro", description: "Nome do estágio é obrigatório", variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -97,7 +97,7 @@ const Courses = () => {
       return;
     }
 
-    toast({ title: "Curso adicionado!", description: "O novo curso foi adicionado com sucesso." });
+    toast({ title: "Estágio adicionado!", description: "O novo estágio foi adicionado com sucesso." });
     setIsAddDialogOpen(false);
     setAddForm({ name: "", category: "", duration: "", price: "", students: "0", status: "Ativo" });
     fetchCourses();
@@ -119,7 +119,7 @@ const Courses = () => {
   const handleEditCourse = async () => {
     if (!editingCourse) return;
     if (!editForm.name.trim()) {
-      toast({ title: "Erro", description: "Nome do curso é obrigatório", variant: "destructive" });
+      toast({ title: "Erro", description: "Nome do estágio é obrigatório", variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -141,14 +141,14 @@ const Courses = () => {
       return;
     }
 
-    toast({ title: "Curso atualizado!", description: "As informações do curso foram atualizadas." });
+    toast({ title: "Estágio atualizado!", description: "As informações do estágio foram atualizadas." });
     setIsEditDialogOpen(false);
     setEditingCourse(null);
     fetchCourses();
   };
 
   const handleDeleteCourse = async (courseId: string) => {
-    if (!confirm("Tem certeza que deseja remover este curso?")) return;
+    if (!confirm("Tem certeza que deseja remover este estágio?")) return;
     setLoading(true);
     const { error } = await supabase.from("courses").delete().eq("id", courseId);
     setLoading(false);
@@ -156,7 +156,7 @@ const Courses = () => {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Curso removido", description: "Curso removido com sucesso." });
+    toast({ title: "Estágio removido", description: "Estágio removido com sucesso." });
     fetchCourses();
   };
 
@@ -167,28 +167,28 @@ const Courses = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Cursos</h2>
-          <p className="text-muted-foreground">Gerencie todos os cursos oferecidos pela CNEA</p>
+          <h2 className="text-3xl font-bold tracking-tight">Estágios</h2>
+          <p className="text-muted-foreground">Gerencie todos os estágios oferecidos pela CNEA</p>
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Adicionar Curso
+              Adicionar Estágio
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Adicionar Novo Curso</DialogTitle>
+              <DialogTitle>Adicionar Novo Estágio</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="courseName">Nome do Curso</Label>
-                <Input id="courseName" value={addForm.name} onChange={(e) => setAddForm(f => ({ ...f, name: e.target.value }))} placeholder="Nome do curso" />
+                <Label htmlFor="courseName">Nome do Estágio</Label>
+                <Input id="courseName" value={addForm.name} onChange={(e) => setAddForm(f => ({ ...f, name: e.target.value }))} placeholder="Nome do estágio" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category">Categoria</Label>
-                <Input id="category" value={addForm.category} onChange={(e) => setAddForm(f => ({ ...f, category: e.target.value }))} placeholder="Ex: Curso Técnico" />
+                <Input id="category" value={addForm.category} onChange={(e) => setAddForm(f => ({ ...f, category: e.target.value }))} placeholder="Ex: Estágio Técnico" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="duration">Duração</Label>
@@ -196,11 +196,11 @@ const Courses = () => {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Valor do Curso (Kz)</Label>
+                  <Label htmlFor="price">Valor do Estágio (Kz)</Label>
                   <Input id="price" type="number" value={addForm.price} onChange={(e) => setAddForm(f => ({ ...f, price: e.target.value }))} placeholder="Ex: 150000" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="students">Alunos</Label>
+                  <Label htmlFor="students">Estagiários</Label>
                   <Input id="students" type="number" value={addForm.students} onChange={(e) => setAddForm(f => ({ ...f, students: e.target.value }))} />
                 </div>
               </div>
@@ -208,7 +208,7 @@ const Courses = () => {
                 <Label htmlFor="status">Status</Label>
                 <Input id="status" value={addForm.status} onChange={(e) => setAddForm(f => ({ ...f, status: e.target.value }))} />
               </div>
-              <Button onClick={handleAddCourse} className="w-full" disabled={loading}>{loading ? "Salvando..." : "Adicionar Curso"}</Button>
+              <Button onClick={handleAddCourse} className="w-full" disabled={loading}>{loading ? "Salvando..." : "Adicionar Estágio"}</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -217,7 +217,7 @@ const Courses = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Cursos</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de Estágios</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{courses.length}</div>
@@ -225,7 +225,7 @@ const Courses = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cursos Ativos</CardTitle>
+            <CardTitle className="text-sm font-medium">Estágios Ativos</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{courses.filter(c => c.status === "Ativo").length}</div>
@@ -233,7 +233,7 @@ const Courses = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Alunos</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de Estagiários</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{courses.reduce((acc, c) => acc + (c.students || 0), 0)}</div>
@@ -241,7 +241,7 @@ const Courses = () => {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Média por Curso</CardTitle>
+            <CardTitle className="text-sm font-medium">Média por estágio</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{courses.length ? Math.round(courses.reduce((acc, c) => acc + (c.students || 0), 0) / courses.length) : 0}</div>
@@ -251,18 +251,18 @@ const Courses = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Cursos</CardTitle>
-          <CardDescription>Visualize e gerencie todos os cursos</CardDescription>
+          <CardTitle>Lista de Estágios</CardTitle>
+          <CardDescription>Visualize e gerencie todos os estágios</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nome do Curso</TableHead>
+                <TableHead>Nome do Estágio</TableHead>
                 <TableHead>Categoria</TableHead>
                 <TableHead>Duração</TableHead>
                 <TableHead>Valor</TableHead>
-                <TableHead>Alunos</TableHead>
+                <TableHead>Estagiários</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -341,12 +341,12 @@ const Courses = () => {
       <Dialog open={isEditDialogOpen} onOpenChange={(v) => { setIsEditDialogOpen(v); if (!v) setEditingCourse(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Editar Curso</DialogTitle>
+            <DialogTitle>Editar Estágio</DialogTitle>
           </DialogHeader>
           {editingCourse && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-courseName">Nome do Curso</Label>
+                <Label htmlFor="edit-courseName">Nome do Estágio</Label>
                 <Input id="edit-courseName" value={editForm.name} onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))} />
               </div>
               <div className="space-y-2">
@@ -359,11 +359,11 @@ const Courses = () => {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-price">Valor do Curso (Kz)</Label>
+                  <Label htmlFor="edit-price">Valor do Estágio (Kz)</Label>
                   <Input id="edit-price" type="number" value={editForm.price} onChange={(e) => setEditForm(f => ({ ...f, price: e.target.value }))} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-students">Alunos</Label>
+                  <Label htmlFor="edit-students">Estagiários</Label>
                   <Input id="edit-students" type="number" value={editForm.students} onChange={(e) => setEditForm(f => ({ ...f, students: e.target.value }))} />
                 </div>
               </div>
