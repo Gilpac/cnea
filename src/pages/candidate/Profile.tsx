@@ -173,46 +173,62 @@ const Profile = () => {
     if (studentId) fetchEnrollments(studentId);
   }, [studentId]);
 
-  const uploadAvatar = async (targetId: string) => {
-    if (!photoFile) return null;
-    try {
-      const path = `profiles/${targetId}/avatar-${Date.now()}-${photoFile.name}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage.from("student-docs").upload(path, photoFile, {
-        cacheControl: "3600",
-        upsert: true,
-      });
-      if (uploadError) {
-        console.warn("avatar upload error:", uploadError);
-        return null;
-      }
-      const { data: urlData } = supabase.storage.from("student-docs").getPublicUrl(path);
-      return (urlData as any)?.publicUrl || null;
-    } catch (err) {
-      console.warn("uploadAvatar error:", err);
-      return null;
+
+  // ...existing code...
+const getCurrentUser = async () => {
+  const { data } = await supabase.auth.getUser();
+  return (data as any)?.user || null;
+};
+
+  // ...existing code...
+const uploadAvatar = async (targetId: string) => {
+  if (!photoFile) return null;
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not authenticated - cannot upload avatar");
+
+  try {
+    const path = `profiles/${targetId}/avatar-${Date.now()}-${photoFile.name}`;
+    const { data: uploadData, error: uploadError } = await supabase.storage.from("student-docs").upload(path, photoFile, {
+      cacheControl: "3600",
+      upsert: true,
+    });
+    if (uploadError) {
+      console.warn("avatar upload error:", uploadError);
+      throw uploadError;
     }
-  };
+    const { data: urlData } = supabase.storage.from("student-docs").getPublicUrl(path);
+    return (urlData as any)?.publicUrl || null;
+  } catch (err) {
+    console.warn("uploadAvatar error:", err);
+    throw err;
+  }
+};
 
   // --- new: upload a single document and return public url ---
-  const uploadDocument = async (targetId: string, key: DocKey, file: File | null) => {
-    if (!file) return null;
-    try {
-      const path = `profiles/${targetId}/docs/${key}-${Date.now()}-${file.name}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage.from("student-docs").upload(path, file, {
-        cacheControl: "3600",
-        upsert: true,
-      });
-      if (uploadError) {
-        console.warn("uploadDocument error:", uploadError);
-        return null;
-      }
-      const { data: urlData } = supabase.storage.from("student-docs").getPublicUrl(path);
-      return (urlData as any)?.publicUrl || null;
-    } catch (err) {
-      console.warn("uploadDocument exception:", err);
-      return null;
+  // ...existing code...
+const uploadDocument = async (targetId: string, key: DocKey, file: File | null) => {
+  if (!file) return null;
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not authenticated - cannot upload document");
+
+  try {
+    const path = `profiles/${targetId}/docs/${key}-${Date.now()}-${file.name}`;
+    const { data: uploadData, error: uploadError } = await supabase.storage.from("student-docs").upload(path, file, {
+      cacheControl: "3600",
+      upsert: true,
+    });
+    if (uploadError) {
+      console.warn("uploadDocument error:", uploadError);
+      throw uploadError;
     }
-  };
+    const { data: urlData } = supabase.storage.from("student-docs").getPublicUrl(path);
+    return (urlData as any)?.publicUrl || null;
+  } catch (err) {
+    console.warn("uploadDocument exception:", err);
+    throw err;
+  }
+};
+// ...existing code...
   // --- end new ---
 
   // helper: check if students.auth_id column exists
