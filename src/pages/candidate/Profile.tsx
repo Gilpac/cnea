@@ -559,8 +559,10 @@ const uploadDocument = async (targetId: string, key: DocKey, file: File | null) 
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    
+                    
                     <label
-                      className="inline-flex items-center rounded border px-3 py-1 text-sm cursor-pointer bg-white hover:bg-gray-50"
+                      className="inline-flex items-center rounded border px-3 py-1 text-sm cursor-pointer bg-white/90 dark:bg-white/5 text-black dark:text-white hover:bg-gray-50 dark:hover:bg-white/10 border-slate-200 dark:border-slate-700"
                       aria-label={`Substituir ${label}`}
                     >
                       <input
