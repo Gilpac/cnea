@@ -276,7 +276,7 @@ const Students = () => {
 
     if (error || !data) {
       setLoading(false);
-      toast({ title: "Erro", description: error?.message || "Não foi possível adicionar aluno", variant: "destructive" });
+      toast({ title: "Erro", description: error?.message || "Não foi possível adicionar estagiário", variant: "destructive" });
       return;
     }
 
@@ -336,7 +336,7 @@ const Students = () => {
       status: "Ativo",
     });
     setAddPhotoFile(null);
-    toast({ title: "Aluno adicionado", description: "Formando criado com sucesso." });
+    toast({ title: "Estagiário adicionado", description: "Estagiário criado com sucesso." });
     fetchStudents();
     fetchEnrollmentsMap();
   };
@@ -430,7 +430,7 @@ const Students = () => {
     setIsEditDialogOpen(false);
     setEditingStudent(null);
     setEditPhotoFile(null);
-    toast({ title: "Aluno atualizado", description: "Informações atualizadas." });
+    toast({ title: "Estagiário atualizado", description: "Informações atualizadas." });
     fetchStudents();
     fetchEnrollmentsMap();
   };
@@ -453,7 +453,7 @@ const Students = () => {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Aluno removido", description: "Aluno removido com sucesso." });
+    toast({ title: "Estagiário removido", description: "Estagiário removido com sucesso." });
     fetchStudents();
     fetchEnrollmentsMap();
   };
@@ -586,21 +586,21 @@ const Students = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Formandos</h2>
-          <p className="text-muted-foreground">Gerencie todos os alunos cadastrados</p>
+          <p className="text-muted-foreground">Gerencie todos os estagiários cadastrados</p>
         </div>
 
         <Dialog open={isAddDialogOpen} onOpenChange={(v) => setIsAddDialogOpen(v)}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Adicionar Aluno
+              Adicionar estagiário
             </Button>
           </DialogTrigger>
 
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Adicionar Novo Formando</DialogTitle>
-              <DialogDescription>Preencha os dados pessoais e académicos do formando</DialogDescription>
+              <DialogTitle>Adicionar Novo Estagiário</DialogTitle>
+              <DialogDescription>Preencha os dados pessoais e académicos do estagiário</DialogDescription>
             </DialogHeader>
 
             <div className="space-y-6">
@@ -643,9 +643,9 @@ const Students = () => {
                 <h3 className="text-lg font-semibold border-b pb-2">2. Dados Académicos</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2"><Label>Instituição</Label><Input value={addForm.institution} onChange={(e) => setAddForm({ ...addForm, institution: e.target.value })} /></div>
-                  <div className="space-y-2"><Label>Curso</Label>
+                  <div className="space-y-2"><Label>Estágio</Label>
                     <Select onValueChange={(v) => setAddForm({ ...addForm, course: v })}>
-                      <SelectTrigger><SelectValue placeholder="Selecione o curso" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Selecione o estágio" /></SelectTrigger>
                       <SelectContent>
                         {coursesOptions.length === 0 ? (
                           availableCourses.map(c => <SelectItem key={c.id} value={c.name}>{c.name}{c.price ? ` — ${Number(c.price).toLocaleString('pt-AO')} Kz` : ""}</SelectItem>)
@@ -685,25 +685,25 @@ const Students = () => {
 
       {/* estatísticas e lista (mantém resto do layout) */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total de Alunos</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{students.length}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Alunos Ativos</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{students.filter(s => s.status === "Ativo").length}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total de estagiários</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{students.length}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Estagiários Ativos</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{students.filter(s => s.status === "Ativo").length}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Concluídos</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{students.filter(s => s.status === "Concluído").length}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Média Geral</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{Math.round(students.filter(s => s.final_grade).reduce((acc, s) => acc + (s.final_grade || 0), 0) / Math.max(1, students.filter(s => s.final_grade).length))}</div></CardContent></Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Alunos</CardTitle>
-          <CardDescription>Pesquise e gerencie informações dos alunos</CardDescription>
+          <CardTitle>Lista de Estagiários</CardTitle>
+          <CardDescription>Pesquise e gerencie informações dos estagiários</CardDescription>
           <div className="relative mt-4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Pesquisar por nome, email ou curso..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+            <Input placeholder="Pesquisar por nome, email ou estágio..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
           </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader><TableRow><TableHead>Aluno</TableHead><TableHead>Curso</TableHead><TableHead>Nota Final</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Estagiário</TableHead><TableHead>Estágio</TableHead><TableHead>Nota Final</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader>
               <TableBody>
                 {visibleStudents.map(s => (
                   <TableRow key={s.id}>
@@ -815,7 +815,7 @@ const Students = () => {
                 <div className="space-y-2"><Label>Nacionalidade</Label><Input value={editForm.nationality} onChange={(e) => setEditForm({ ...editForm, nationality: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Contacto</Label><Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Instituição</Label><Input value={editForm.institution} onChange={(e) => setEditForm({ ...editForm, institution: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Curso</Label><Input value={editForm.course} onChange={(e) => setEditForm({ ...editForm, course: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Estágio</Label><Input value={editForm.course} onChange={(e) => setEditForm({ ...editForm, course: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Ano</Label><Input type="number" value={editForm.year} onChange={(e) => setEditForm({ ...editForm, year: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Turno</Label><Select onValueChange={(v) => setEditForm({ ...editForm, shift: v })}><SelectTrigger><SelectValue placeholder={editForm.shift || "Selecione"} /></SelectTrigger><SelectContent><SelectItem value="manha">Manhã</SelectItem><SelectItem value="tarde">Tarde</SelectItem><SelectItem value="noite">Noite</SelectItem></SelectContent></Select></div>
                 <div className="space-y-2"><Label>Nota Final</Label><Input type="number" value={editForm.final_grade} onChange={(e) => setEditForm({ ...editForm, final_grade: e.target.value })} /></div>
@@ -866,7 +866,7 @@ const Students = () => {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Confirmar eliminação</DialogTitle>
-            <DialogDescription>Tem certeza que deseja remover este aluno? Esta ação é irreversível.</DialogDescription>
+            <DialogDescription>Tem certeza que deseja remover este estagiário? Esta ação é irreversível.</DialogDescription>
           </DialogHeader>
           <div className="flex gap-2 mt-4">
             <Button variant="destructive" className="w-full" onClick={performDeleteStudent} disabled={loading}>
