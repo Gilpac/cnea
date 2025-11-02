@@ -526,36 +526,86 @@ const uploadDocument = async (targetId: string, key: DocKey, file: File | null) 
       </div>
 
       {/* DOCUMENTS CARD (new) */}
+      
+      {/* DOCUMENTS CARD (responsive) */}
+
       <Card>
         <CardHeader>
           <CardTitle>Documentos</CardTitle>
-          <CardDescription>Carregue até 5 documentos: CV, BI, Foto tipo passe, Comprovativo de pagamento, Declaração/Certificado</CardDescription>
+          <CardDescription>
+            Carregue até 5 documentos: CV, BI, Fotografia tipo passe, Comprovativo de pagamento, Declaração/Certificado
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {docKeys.map(({ key, label }) => (
-              <div key={key} className="space-y-2">
-                <Label>{label}</Label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0] || null;
-                      setDocFiles((d) => ({ ...d, [key]: f }));
-                    }}
-                  />
-                  <Button onClick={() => handleViewDocument(docUrls[key])} variant="outline">Visualizar</Button>
-                  <Button onClick={() => handleDownloadDocument(docUrls[key], `${profileData.name || "documento"}-${key}`)} variant="ghost">Descarregar</Button>
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+            {docKeys.map(({ key, label }) => {
+              const file = docFiles[key];
+              const url = docUrls[key];
+              const displayName = file
+                ? file.name
+                : url
+                ? decodeURIComponent(String(url).split("/").pop() || "")
+                : "Nenhum ficheiro";
+              return (
+                <div key={key} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 border rounded-md bg-muted/5">
+                  <div className="flex-1 min-w-0">
+                    <Label className="mb-1 block">{label}</Label>
+                    <div className="text-sm text-muted-foreground truncate">{displayName}</div>
+                    {file && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Pronto a enviar · {(file.size / 1024).toFixed(1)} KB
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <label
+                      className="inline-flex items-center rounded border px-3 py-1 text-sm cursor-pointer bg-white hover:bg-gray-50"
+                      aria-label={`Substituir ${label}`}
+                    >
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0] || null;
+                          if (f) {
+                            setDocFiles((d) => ({ ...d, [key]: f }));
+                            try {
+                              const tmp = URL.createObjectURL(f);
+                              setDocUrls((d) => ({ ...d, [key]: tmp }));
+                            } catch {}
+                          }
+                        }}
+                      />
+                      Substituir
+                    </label>
+
+                    <Button className="whitespace-nowrap" variant="outline" onClick={() => handleViewDocument(url)}>
+                      Visualizar
+                    </Button>
+                    <Button
+                      className="whitespace-nowrap"
+                      variant="ghost"
+                      onClick={() =>
+                        handleDownloadDocument(
+                          url,
+                          `${(profileData.name || "documento").replace(/\s+/g, "_")}-${key}`
+                        )
+                      }
+                    >
+                      Descarregar
+                    </Button>
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {docFiles[key] ? `Ficheiro pronto a enviar: ${docFiles[key]?.name}` : (docUrls[key] ? `Ficheiro carregado: ${docUrls[key].split("/").pop()}` : "Nenhum ficheiro")}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
           <div className="pt-4">
-            <div className="text-sm text-muted-foreground">Nota: guarde o perfil para enviar os ficheiros. Os ficheiros são armazenados no bucket <code>student-docs</code>.</div>
+            <div className="text-sm text-muted-foreground">
+              Nota: guarde o perfil para enviar os ficheiros. Os ficheiros são armazenados no bucket <code>student-docs</code>.
+            </div>
           </div>
         </CardContent>
       </Card>
