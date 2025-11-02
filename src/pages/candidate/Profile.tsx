@@ -342,7 +342,7 @@ const uploadDocument = async (targetId: string, key: DocKey, file: File | null) 
       return;
     }
     if (!newCourseId) {
-      toast({ title: "Selecione um curso", variant: "destructive" });
+      toast({ title: "Selecione um estágio", variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -505,7 +505,7 @@ const uploadDocument = async (targetId: string, key: DocKey, file: File | null) 
             {/* academic small inputs */}
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="institution">Instituição (opcional)</Label>
+                <Label htmlFor="institution">Instituição de Ensino</Label>
                 <Input id="institution" value={profileData.institution} onChange={(e) => setProfileData({ ...profileData, institution: e.target.value })} />
               </div>
               <div className="space-y-2">
@@ -606,7 +606,7 @@ const uploadDocument = async (targetId: string, key: DocKey, file: File | null) 
 
           <div className="pt-4">
             <div className="text-sm text-muted-foreground">
-              Nota: guarde o perfil para enviar os ficheiros. Os ficheiros são armazenados no bucket <code>student-docs</code>.
+              Nota: Click no botão "Salvar Alterações" para enviar e salvar os ficheiros.
             </div>
           </div>
         </CardContent>
@@ -617,7 +617,7 @@ const uploadDocument = async (targetId: string, key: DocKey, file: File | null) 
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-2xl font-semibold">Minhas Inscrições</h3>
           <div className="flex gap-3">
-            <Input placeholder="Pesquisar curso..." value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} />
+            <Input placeholder="Pesquisar estágio..." value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} />
           </div>
         </div>
 
@@ -630,7 +630,7 @@ const uploadDocument = async (targetId: string, key: DocKey, file: File | null) 
           </Card>
           <Card>
             <CardContent>
-              <div className="text-sm text-muted-foreground">Cursos Disponíveis</div>
+              <div className="text-sm text-muted-foreground">Estágios Disponíveis</div>
               <div className="text-2xl font-bold">{coursesOptions.length}</div>
             </CardContent>
           </Card>
@@ -654,7 +654,7 @@ const uploadDocument = async (targetId: string, key: DocKey, file: File | null) 
               <div className="sm:col-span-2">
                 <Label>Adicionar nova inscrição</Label>
                 <select className="w-full rounded border px-3 py-2" value={newCourseId} onChange={(e) => setNewCourseId(e.target.value)}>
-                  <option value="">-- selecione curso --</option>
+                  <option value="">-- selecione estágio --</option>
                   {coursesOptions.map((c) => <option key={c.id} value={c.id}>{c.name}{c.price ? ` — ${Number(c.price).toLocaleString("pt-AO")} Kz` : ""}</option>)}
                 </select>
               </div>
@@ -667,7 +667,7 @@ const uploadDocument = async (targetId: string, key: DocKey, file: File | null) 
               <table className="w-full">
                 <thead>
                   <tr className="text-left text-sm text-muted-foreground">
-                    <th className="py-2">Curso</th>
+                    <th className="py-2">Estágio</th>
                     <th className="py-2">Preço</th>
                     <th className="py-2">Inscrito Em</th>
                     <th className="py-2">Ações</th>
