@@ -51,12 +51,21 @@ type Student = {
   documents?: Record<string, any> | null;
   has_certificate?: boolean | null;
   created_at?: string | null;
+
+  // --- new: support student-level doc_* columns added by Profile page
+  doc_cv_url?: string | null;
+  doc_bi_url?: string | null;
+  doc_passport_photo_url?: string | null;
+  doc_payment_url?: string | null;
+  doc_declaration_url?: string | null;
 };
 
 const Students = () => {
   const { toast } = useToast();
 
   const [students, setStudents] = useState<Student[]>([]);
+  // map studentId -> array of enrolled courses (name + id)
+  const [enrollmentsByStudent, setEnrollmentsByStudent] = useState<Record<string, { course_id: string; courseName: string }[]>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -148,11 +157,16 @@ const Students = () => {
   useEffect(() => {
     fetchStudents();
     fetchCoursesOptions(); // load courses for dropdown
+    fetchEnrollmentsMap(); // load enrollments so admin sees what students subscribed to
   }, []);
 
   const fetchStudents = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from("students").select("*").order("created_at", { ascending: false });
+    // request also the doc_* columns (if present)
+    const { data, error } = await supabase
+      .from("students")
+      .select("*, doc_cv_url, doc_bi_url, doc_passport_photo_url, doc_payment_url, doc_declaration_url")
+      .order("created_at", { ascending: false });
     setLoading(false);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -171,6 +185,30 @@ const Students = () => {
     setCoursesOptions((data as any) || []);
   };
   // --- end added ---
+
+  // fetch enrollments and build map studentId => [courses]
+  const fetchEnrollmentsMap = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("enrollments")
+        .select("student_id,course_id,created_at,courses(name)")
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.warn("fetchEnrollmentsMap error:", error);
+        return;
+      }
+      const map: Record<string, { course_id: string; courseName: string }[]> = {};
+      (data || []).forEach((row: any) => {
+        const sid = row.student_id;
+        const cname = row.courses?.name || row.course_id;
+        map[sid] = map[sid] || [];
+        map[sid].push({ course_id: row.course_id, courseName: cname });
+      });
+      setEnrollmentsByStudent(map);
+    } catch (err) {
+      console.warn("fetchEnrollmentsMap exception:", err);
+    }
+  };
 
   // helper: file -> dataURL fallback
   const fileToDataUrl = (f: File) =>
@@ -300,6 +338,7 @@ const Students = () => {
     setAddPhotoFile(null);
     toast({ title: "Aluno adicionado", description: "Formando criado com sucesso." });
     fetchStudents();
+    fetchEnrollmentsMap();
   };
 
   const openEditDialog = (student: Student) => {
@@ -393,6 +432,7 @@ const Students = () => {
     setEditPhotoFile(null);
     toast({ title: "Aluno atualizado", description: "Informações atualizadas." });
     fetchStudents();
+    fetchEnrollmentsMap();
   };
 
   // REPLACED: open delete dialog instead of using browser confirm
@@ -415,6 +455,7 @@ const Students = () => {
     }
     toast({ title: "Aluno removido", description: "Aluno removido com sucesso." });
     fetchStudents();
+    fetchEnrollmentsMap();
   };
   // --- end added ---
 
@@ -445,57 +486,88 @@ const Students = () => {
   };
 
   const getDocumentUrl = (s: Student | null, key: string) => {
-    if (!s || !s.documents) return null;
-    // support both naming schemes
-    const docs = s.documents as any;
-    const altMap: Record<string, string> = {
-      id_document_url: "idDocument",
-      certificate_url: "certificate",
-      cv_url: "cv",
-      passport_url: "passportPhoto",
-      payment_url: "paymentProof",
+    if (!s) return null;
+    // first prefer explicit doc_* columns created by candidate Profile
+    const docColumnMap: Record<string, string> = {
+      id_document_url: "doc_bi_url",
+      certificate_url: "doc_declaration_url",
+      cv_url: "doc_cv_url",
+      passport_url: "doc_passport_photo_url",
+      payment_url: "doc_payment_url",
     };
-    // direct new-style key
-    if (docs[key]) return docs[key];
-    // legacy nested object
-    const legacyKey = altMap[key];
-    if (legacyKey && docs[legacyKey]) {
-      // might be object { name, uploaded, url } or { name, uploaded }
-      if (typeof docs[legacyKey] === "string") return docs[legacyKey];
-      if (docs[legacyKey].url) return docs[legacyKey].url;
-      if (docs[legacyKey].name && docs[legacyKey].uploaded && !docs[legacyKey].url) {
-        // no url available, return null so UI shows filename only
-        return null;
+    const col = docColumnMap[key];
+    if (col && (s as any)[col]) return (s as any)[col];
+
+    // then support documents JSON (admin older flow)
+    if (s.documents) {
+      const docs = s.documents as any;
+      // direct keys used by admin flows
+      if (docs[key]) {
+        if (typeof docs[key] === "string") return docs[key];
+        if (docs[key].url) return docs[key].url;
+      }
+      // legacy alt names
+      const altMap: Record<string, string> = {
+        id_document_url: "idDocument",
+        certificate_url: "certificate",
+        cv_url: "cv",
+        passport_url: "passportPhoto",
+        payment_url: "paymentProof",
+      };
+      const legacyKey = altMap[key];
+      if (legacyKey && docs[legacyKey]) {
+        if (typeof docs[legacyKey] === "string") return docs[legacyKey];
+        if (docs[legacyKey].url) return docs[legacyKey].url;
       }
     }
     return null;
   };
 
   const getDocumentName = (s: Student | null, key: string) => {
-    if (!s || !s.documents) return null;
-    const docs = s.documents as any;
-    const altMap: Record<string, string> = {
-      id_document_url: "idDocument",
-      certificate_url: "certificate",
-      cv_url: "cv",
-      passport_url: "passportPhoto",
-      payment_url: "paymentProof",
+    if (!s) return null;
+    // prefer doc_* columns
+    const docColumnMap: Record<string, string> = {
+      id_document_url: "doc_bi_url",
+      certificate_url: "doc_declaration_url",
+      cv_url: "doc_cv_url",
+      passport_url: "doc_passport_photo_url",
+      payment_url: "doc_payment_url",
     };
-    if (docs[key]) {
+    const col = docColumnMap[key];
+    const maybeUrl = col ? (s as any)[col] : null;
+    if (maybeUrl) {
       try {
-        const url = docs[key] as string;
-        // if dataURL -> show a placeholder name, else use path last segment
-        if (url.startsWith("data:")) return "Ficheiro enviado";
-        return url.split("/").pop();
+        if ((maybeUrl as string).startsWith("data:")) return "Ficheiro enviado";
+        return decodeURIComponent(String(maybeUrl).split("/").pop() || String(maybeUrl));
       } catch {
-        return String(docs[key]);
+        return String(maybeUrl);
       }
     }
-    const legacyKey = altMap[key];
-    if (legacyKey && docs[legacyKey]) {
-      const entry = docs[legacyKey];
-      if (typeof entry === "string") return entry;
-      if (entry.name) return entry.name;
+
+    if (s.documents) {
+      const docs = s.documents as any;
+      if (docs[key]) {
+        try {
+          const url = docs[key] as string;
+          if (url.startsWith("data:")) return "Ficheiro enviado";
+          return decodeURIComponent(url.split("/").pop() || url);
+        } catch {
+          return String(docs[key]);
+        }
+      }
+      const altMap: Record<string, string> = {
+        id_document_url: "idDocument",
+        certificate_url: "certificate",
+        cv_url: "cv",
+        passport_url: "passportPhoto",
+        payment_url: "paymentProof",
+      };
+      const legacyKey = altMap[key];
+      if (legacyKey && docs[legacyKey]) {
+        const entry = docs[legacyKey];
+        if (typeof entry === "string") return entry;
+        if (entry.name) return entry.name;
+      }
     }
     return null;
   };
@@ -641,7 +713,14 @@ const Students = () => {
                         <div><div className="font-medium">{s.full_name}</div><div className="text-sm text-muted-foreground">{s.email}</div></div>
                       </div>
                     </TableCell>
-                    <TableCell><Badge variant="outline">{s.course}</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{s.course}</Badge>
+                      {enrollmentsByStudent[s.id] ? (
+                        <div className="mt-1 text-sm text-muted-foreground">
+                          {enrollmentsByStudent[s.id].map(e => e.courseName).join(", ")}
+                        </div>
+                      ) : null}
+                    </TableCell>
                     <TableCell>{s.final_grade ?? <span className="text-muted-foreground">-</span>}</TableCell>
                     <TableCell><Badge variant={s.status === "Ativo" ? "default" : "secondary"}>{s.status}</Badge></TableCell>
                     <TableCell className="text-right">
